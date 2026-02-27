@@ -1,26 +1,29 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Users } from 'lucide-react';
+import { ArrowLeft, Users, Loader2 } from 'lucide-react';
 import { useQuizStore } from '@/lib/quiz-store';
 
 const JoinQuiz = () => {
   const navigate = useNavigate();
   const { code: urlCode } = useParams();
   const joinQuiz = useQuizStore(s => s.joinQuiz);
-  const quiz = useQuizStore(s => s.quiz);
   const [code, setCode] = useState(urlCode || '');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [joining, setJoining] = useState(false);
 
-  const handleJoin = () => {
-    if (!code.trim() || !name.trim()) return;
-    const result = joinQuiz(code.trim().toUpperCase(), name.trim());
+  const handleJoin = async () => {
+    if (!code.trim() || !name.trim() || joining) return;
+    setJoining(true);
+    setError('');
+    const result = await joinQuiz(code.trim().toUpperCase(), name.trim());
     if (result.success) {
       navigate(`/lobby/${code.trim().toUpperCase()}`);
     } else {
       setError(result.error || 'Failed to join');
     }
+    setJoining(false);
   };
 
   return (
@@ -73,11 +76,11 @@ const JoinQuiz = () => {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleJoin}
-            disabled={!code.trim() || !name.trim()}
+            disabled={!code.trim() || !name.trim() || joining}
             className="w-full px-6 py-4 rounded-xl bg-accent text-accent-foreground font-display font-semibold text-lg glow-accent disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
           >
-            <Users className="w-5 h-5" />
-            Join Quiz
+            {joining ? <Loader2 className="w-5 h-5 animate-spin" /> : <Users className="w-5 h-5" />}
+            {joining ? 'Joining...' : 'Join Quiz'}
           </motion.button>
         </div>
       </motion.div>

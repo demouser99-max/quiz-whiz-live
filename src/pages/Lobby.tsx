@@ -1,6 +1,7 @@
+import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Copy, Share2, Play, Users, X } from 'lucide-react';
+import { Copy, Share2, Play, Users, X, Loader2 } from 'lucide-react';
 import { useQuizStore } from '@/lib/quiz-store';
 import { toast } from 'sonner';
 
@@ -8,11 +9,44 @@ const Lobby = () => {
   const navigate = useNavigate();
   const { code } = useParams();
   const quiz = useQuizStore(s => s.quiz);
-  const currentPlayerId = useQuizStore(s => s.currentPlayerId);
+  const loading = useQuizStore(s => s.loading);
+  const sessionId = useQuizStore(s => s.sessionId);
+  const fetchQuiz = useQuizStore(s => s.fetchQuiz);
   const startQuiz = useQuizStore(s => s.startQuiz);
   const kickPlayer = useQuizStore(s => s.kickPlayer);
+  const subscribeToQuiz = useQuizStore(s => s.subscribeToQuiz);
 
-  const isHost = quiz?.players.find(p => p.id === currentPlayerId)?.isHost;
+  const myPlayer = quiz?.players.find(p => p.sessionId === sessionId);
+  const isHost = myPlayer?.isHost;
+
+  // Fetch quiz data and subscribe to realtime
+  useEffect(() => {
+    if (code) {
+      fetchQuiz(code);
+    }
+  }, [code]);
+
+  useEffect(() => {
+    if (quiz?.id) {
+      const unsubscribe = subscribeToQuiz(quiz.id);
+      return unsubscribe;
+    }
+  }, [quiz?.id]);
+
+  // Navigate when quiz starts
+  useEffect(() => {
+    if (quiz?.status === 'playing') {
+      navigate(`/play/${quiz.code}`);
+    }
+  }, [quiz?.status]);
+
+  if (loading || (!quiz && !loading)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!quiz || quiz.code !== code) {
     return (
@@ -41,9 +75,8 @@ const Lobby = () => {
     }
   };
 
-  const handleStart = () => {
-    startQuiz();
-    navigate(`/play/${quiz.code}`);
+  const handleStart = async () => {
+    await startQuiz();
   };
 
   return (

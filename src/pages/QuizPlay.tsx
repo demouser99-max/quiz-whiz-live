@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuizStore } from '@/lib/quiz-store';
 import confetti from 'canvas-confetti';
-import { Trophy, Clock, SkipForward, Square, ChevronRight } from 'lucide-react';
+import { Trophy, Clock, Square, ChevronRight, Loader2 } from 'lucide-react';
 
 const optionColors = [
   'bg-quiz-red hover-quiz-red',
@@ -18,12 +18,14 @@ const QuizPlay = () => {
   const navigate = useNavigate();
   const { code } = useParams();
   const quiz = useQuizStore(s => s.quiz);
-  const currentPlayerId = useQuizStore(s => s.currentPlayerId);
+  const sessionId = useQuizStore(s => s.sessionId);
+  const fetchQuiz = useQuizStore(s => s.fetchQuiz);
   const submitAnswer = useQuizStore(s => s.submitAnswer);
   const nextQuestion = useQuizStore(s => s.nextQuestion);
   const endQuiz = useQuizStore(s => s.endQuiz);
   const getCurrentQuestion = useQuizStore(s => s.getCurrentQuestion);
   const getLeaderboard = useQuizStore(s => s.getLeaderboard);
+  const subscribeToQuiz = useQuizStore(s => s.subscribeToQuiz);
 
   const [timeLeft, setTimeLeft] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -32,7 +34,20 @@ const QuizPlay = () => {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   const question = getCurrentQuestion();
-  const isHost = quiz?.players.find(p => p.id === currentPlayerId)?.isHost;
+  const myPlayer = quiz?.players.find(p => p.sessionId === sessionId);
+  const isHost = myPlayer?.isHost;
+
+  // Fetch and subscribe
+  useEffect(() => {
+    if (code) fetchQuiz(code);
+  }, [code]);
+
+  useEffect(() => {
+    if (quiz?.id) {
+      const unsubscribe = subscribeToQuiz(quiz.id);
+      return unsubscribe;
+    }
+  }, [quiz?.id]);
 
   // Redirect if quiz ended
   useEffect(() => {
@@ -64,11 +79,11 @@ const QuizPlay = () => {
     return () => clearInterval(interval);
   }, [quiz?.currentQuestionIndex]);
 
-  const handleAnswer = (index: number) => {
-    if (selectedAnswer !== null || showResult || !question || !currentPlayerId) return;
+  const handleAnswer = async (index: number) => {
+    if (selectedAnswer !== null || showResult || !question) return;
     const timeMs = Date.now() - answerStartTime;
     setSelectedAnswer(index);
-    submitAnswer(currentPlayerId, question.id, index, timeMs);
+    await submitAnswer(question.id, index, timeMs);
 
     if (index === question.correctIndex) {
       confetti({ particleCount: 30, spread: 50, origin: { y: 0.7 } });
@@ -77,21 +92,29 @@ const QuizPlay = () => {
     setTimeout(() => setShowResult(true), 800);
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     setShowResult(false);
     setShowLeaderboard(false);
-    nextQuestion();
+    await nextQuestion();
+    // Refetch to get updated scores
+    if (code) await fetchQuiz(code);
   };
 
-  const handleShowLeaderboard = () => {
+  const handleShowLeaderboard = async () => {
+    if (code) await fetchQuiz(code); // get latest scores
     setShowLeaderboard(true);
   };
 
-  if (!quiz || !question) return null;
+  if (!quiz || !question) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const timerPercent = (timeLeft / quiz.timePerQuestion) * 100;
   const leaderboard = getLeaderboard();
-  const currentPlayer = quiz.players.find(p => p.id === currentPlayerId);
 
   if (showLeaderboard) {
     return (
@@ -113,7 +136,7 @@ const QuizPlay = () => {
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: i * 0.08 }}
                 className={`flex items-center justify-between px-4 py-3 rounded-xl ${
-                  player.id === currentPlayerId ? 'bg-primary/20 border border-primary/40' : 'bg-card border border-border'
+                  player.sessionId === sessionId ? 'bg-primary/20 border border-primary/40' : 'bg-card border border-border'
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -264,7 +287,7 @@ const QuizPlay = () => {
       {/* Score footer */}
       <div className="text-center mt-4">
         <span className="text-sm text-muted-foreground">Your Score: </span>
-        <span className="font-mono font-bold text-primary">{currentPlayer?.score || 0}</span>
+        <span className="font-mono font-bold text-primary">{myPlayer?.score || 0}</span>
       </div>
     </div>
   );

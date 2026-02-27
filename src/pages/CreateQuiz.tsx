@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Zap } from 'lucide-react';
+import { ArrowLeft, Zap, Loader2 } from 'lucide-react';
 import { useQuizStore } from '@/lib/quiz-store';
+import { toast } from 'sonner';
 
 const CreateQuiz = () => {
   const navigate = useNavigate();
@@ -10,11 +11,19 @@ const CreateQuiz = () => {
   const [title, setTitle] = useState('');
   const [numQuestions, setNumQuestions] = useState(10);
   const [timePerQuestion, setTimePerQuestion] = useState(20);
+  const [creating, setCreating] = useState(false);
 
-  const handleCreate = () => {
-    if (!title.trim()) return;
-    const code = createQuiz(title.trim(), numQuestions, timePerQuestion);
-    navigate(`/lobby/${code}`);
+  const handleCreate = async () => {
+    if (!title.trim() || creating) return;
+    setCreating(true);
+    try {
+      const code = await createQuiz(title.trim(), numQuestions, timePerQuestion);
+      navigate(`/lobby/${code}`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create quiz');
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -85,11 +94,11 @@ const CreateQuiz = () => {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleCreate}
-            disabled={!title.trim()}
+            disabled={!title.trim() || creating}
             className="w-full px-6 py-4 rounded-xl bg-primary text-primary-foreground font-display font-semibold text-lg glow-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
           >
-            <Zap className="w-5 h-5" />
-            Create Quiz
+            {creating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+            {creating ? 'Creating...' : 'Create Quiz'}
           </motion.button>
         </div>
       </motion.div>

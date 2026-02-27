@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { supabase } from '@/integrations/supabase/client';
 import { Question, getRandomQuestions, generateQuizCode } from '@/data/questions';
 
 export interface Player {
@@ -7,10 +7,18 @@ export interface Player {
   name: string;
   score: number;
   isHost: boolean;
-  answers: { questionId: string; selectedIndex: number; timeMs: number }[];
+  sessionId: string;
+}
+
+export interface Answer {
+  questionId: string;
+  selectedIndex: number;
+  timeMs: number;
+  points: number;
 }
 
 export interface Quiz {
+  id: string;
   code: string;
   title: string;
   questions: Question[];
@@ -23,197 +31,292 @@ export interface Quiz {
 
 interface QuizStore {
   quiz: Quiz | null;
-  currentPlayerId: string | null;
+  sessionId: string;
+  loading: boolean;
+  error: string | null;
+  playerAnswers: Record<string, Answer[]>; // playerId -> answers
 
-  createQuiz: (title: string, numQuestions: number, timePerQuestion: number) => string;
-  joinQuiz: (code: string, name: string) => { success: boolean; error?: string; playerId?: string };
-  startQuiz: () => void;
-  nextQuestion: () => void;
-  submitAnswer: (playerId: string, questionId: string, selectedIndex: number, timeMs: number) => void;
-  kickPlayer: (playerId: string) => void;
-  resetLeaderboard: () => void;
-  endQuiz: () => void;
+  createQuiz: (title: string, numQuestions: number, timePerQuestion: number) => Promise<string>;
+  joinQuiz: (code: string, name: string) => Promise<{ success: boolean; error?: string }>;
+  fetchQuiz: (code: string) => Promise<boolean>;
+  startQuiz: () => Promise<void>;
+  nextQuestion: () => Promise<void>;
+  submitAnswer: (questionId: string, selectedIndex: number, timeMs: number) => Promise<void>;
+  kickPlayer: (playerId: string) => Promise<void>;
+  endQuiz: () => Promise<void>;
   getLeaderboard: () => Player[];
   getCurrentQuestion: () => Question | null;
-  setCurrentPlayerId: (id: string) => void;
-  restoreSession: () => void;
+  subscribeToQuiz: (quizId: string) => () => void;
+  getMyPlayer: () => Player | null;
 }
 
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 10);
+function getSessionId(): string {
+  let id = sessionStorage.getItem('quizwhiz-session-id');
+  if (!id) {
+    id = Math.random().toString(36).substring(2, 15);
+    sessionStorage.setItem('quizwhiz-session-id', id);
+  }
+  return id;
 }
 
-const botNames = ['Alex', 'Jordan', 'Sam', 'Taylor', 'Casey', 'Morgan', 'Riley', 'Quinn'];
-
-// Store playerId per-tab so host & player tabs don't conflict
-function saveSessionPlayerId(id: string) {
-  sessionStorage.setItem('quizwhiz-player-id', id);
-}
-function getSessionPlayerId(): string | null {
-  return sessionStorage.getItem('quizwhiz-player-id');
-}
-
-export const useQuizStore = create<QuizStore>()(persist((set, get) => ({
+export const useQuizStore = create<QuizStore>((set, get) => ({
   quiz: null,
-  currentPlayerId: null,
+  sessionId: getSessionId(),
+  loading: false,
+  error: null,
+  playerAnswers: {},
 
-  setCurrentPlayerId: (id: string) => {
-    saveSessionPlayerId(id);
-    set({ currentPlayerId: id });
-  },
-
-  restoreSession: () => {
-    const savedId = getSessionPlayerId();
-    if (savedId) {
-      set({ currentPlayerId: savedId });
-    }
-  },
-
-  createQuiz: (title, numQuestions, timePerQuestion) => {
+  createQuiz: async (title, numQuestions, timePerQuestion) => {
     const code = generateQuizCode();
-    const hostId = generateId();
     const questions = getRandomQuestions(numQuestions);
+    const sessionId = get().sessionId;
 
-    const bots: Player[] = botNames.slice(0, 4).map(name => ({
-      id: generateId(),
-      name,
-      score: 0,
-      isHost: false,
-      answers: [],
-    }));
+    const { data: quizData, error: quizError } = await supabase
+      .from('quizzes')
+      .insert({
+        code,
+        title,
+        questions: questions as any,
+        time_per_question: timePerQuestion,
+        status: 'lobby',
+        current_question_index: -1,
+      })
+      .select()
+      .single();
 
-    saveSessionPlayerId(hostId);
+    if (quizError || !quizData) throw new Error(quizError?.message || 'Failed to create quiz');
+
+    // Add host as player
+    const { data: playerData, error: playerError } = await supabase
+      .from('players')
+      .insert({
+        quiz_id: quizData.id,
+        session_id: sessionId,
+        name: 'Host',
+        is_host: true,
+        score: 0,
+      })
+      .select()
+      .single();
+
+    if (playerError) throw new Error(playerError.message);
 
     set({
       quiz: {
+        id: quizData.id,
         code,
         title,
         questions,
         timePerQuestion,
-        players: [
-          { id: hostId, name: 'Host', score: 0, isHost: true, answers: [] },
-          ...bots,
-        ],
+        players: [{
+          id: playerData.id,
+          name: 'Host',
+          score: 0,
+          isHost: true,
+          sessionId,
+        }],
         currentQuestionIndex: -1,
         status: 'lobby',
       },
-      currentPlayerId: hostId,
     });
 
     return code;
   },
 
-  joinQuiz: (code, name) => {
-    const { quiz } = get();
-    if (!quiz || quiz.code !== code) {
-      return { success: false, error: 'Quiz not found. Make sure the code is correct.' };
+  joinQuiz: async (code, name) => {
+    const sessionId = get().sessionId;
+
+    // Fetch quiz
+    const { data: quizData, error: quizError } = await supabase
+      .from('quizzes')
+      .select('*')
+      .eq('code', code)
+      .single();
+
+    if (quizError || !quizData) {
+      return { success: false, error: 'Quiz not found. Check the code and try again.' };
     }
-    if (quiz.status !== 'lobby') {
+
+    if (quizData.status !== 'lobby') {
       return { success: false, error: 'Quiz has already started.' };
     }
-    if (quiz.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+
+    // Check for duplicate name
+    const { data: existingPlayers } = await supabase
+      .from('players')
+      .select('*')
+      .eq('quiz_id', quizData.id);
+
+    if (existingPlayers?.some(p => p.name.toLowerCase() === name.toLowerCase())) {
       return { success: false, error: 'Name already taken. Choose a different name.' };
     }
-    const playerId = generateId();
 
-    // Save this tab's player ID without affecting other tabs
-    saveSessionPlayerId(playerId);
+    // Check if this session already joined
+    const existingPlayer = existingPlayers?.find(p => p.session_id === sessionId);
+    if (existingPlayer) {
+      // Already joined, just load the quiz
+      await get().fetchQuiz(code);
+      return { success: true };
+    }
+
+    // Add player
+    const { error: playerError } = await supabase
+      .from('players')
+      .insert({
+        quiz_id: quizData.id,
+        session_id: sessionId,
+        name,
+        is_host: false,
+        score: 0,
+      });
+
+    if (playerError) {
+      return { success: false, error: playerError.message };
+    }
+
+    await get().fetchQuiz(code);
+    return { success: true };
+  },
+
+  fetchQuiz: async (code) => {
+    set({ loading: true, error: null });
+
+    const { data: quizData, error: quizError } = await supabase
+      .from('quizzes')
+      .select('*')
+      .eq('code', code)
+      .single();
+
+    if (quizError || !quizData) {
+      set({ loading: false, error: 'Quiz not found' });
+      return false;
+    }
+
+    const { data: playersData } = await supabase
+      .from('players')
+      .select('*')
+      .eq('quiz_id', quizData.id)
+      .order('created_at', { ascending: true });
+
+    const { data: answersData } = await supabase
+      .from('answers')
+      .select('*')
+      .eq('quiz_id', quizData.id);
+
+    const playerAnswers: Record<string, Answer[]> = {};
+    answersData?.forEach(a => {
+      if (!playerAnswers[a.player_id]) playerAnswers[a.player_id] = [];
+      playerAnswers[a.player_id].push({
+        questionId: a.question_id,
+        selectedIndex: a.selected_index,
+        timeMs: a.time_ms,
+        points: a.points,
+      });
+    });
+
+    const players: Player[] = (playersData || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      score: p.score,
+      isHost: p.is_host,
+      sessionId: p.session_id,
+    }));
 
     set({
       quiz: {
-        ...quiz,
-        players: [...quiz.players, { id: playerId, name, score: 0, isHost: false, answers: [] }],
+        id: quizData.id,
+        code: quizData.code,
+        title: quizData.title,
+        questions: quizData.questions as unknown as Question[],
+        timePerQuestion: quizData.time_per_question,
+        players,
+        currentQuestionIndex: quizData.current_question_index,
+        status: quizData.status as Quiz['status'],
+        startedAt: quizData.started_at ? new Date(quizData.started_at).getTime() : undefined,
       },
-      currentPlayerId: playerId,
+      playerAnswers,
+      loading: false,
     });
-    return { success: true, playerId };
+
+    return true;
   },
 
-  startQuiz: () => {
+  startQuiz: async () => {
     const { quiz } = get();
     if (!quiz) return;
-    set({
-      quiz: { ...quiz, status: 'playing', currentQuestionIndex: 0, startedAt: Date.now() },
-    });
+
+    await supabase
+      .from('quizzes')
+      .update({
+        status: 'playing',
+        current_question_index: 0,
+        started_at: new Date().toISOString(),
+      })
+      .eq('id', quiz.id);
   },
 
-  nextQuestion: () => {
+  nextQuestion: async () => {
     const { quiz } = get();
     if (!quiz) return;
     const nextIndex = quiz.currentQuestionIndex + 1;
 
-    const currentQ = quiz.questions[quiz.currentQuestionIndex];
-    const updatedPlayers = quiz.players.map(p => {
-      if (p.isHost || p.id === get().currentPlayerId) return p;
-      if (p.answers.some(a => a.questionId === currentQ.id)) return p;
-
-      const correct = Math.random() > 0.4;
-      const selectedIndex = correct ? currentQ.correctIndex : (currentQ.correctIndex + 1 + Math.floor(Math.random() * 3)) % 4;
-      const timeMs = 1000 + Math.random() * (quiz.timePerQuestion * 1000 - 2000);
-      const points = correct ? Math.max(100, Math.round(1000 - timeMs / 10)) : 0;
-
-      return {
-        ...p,
-        score: p.score + points,
-        answers: [...p.answers, { questionId: currentQ.id, selectedIndex, timeMs }],
-      };
-    });
-
     if (nextIndex >= quiz.questions.length) {
-      set({ quiz: { ...quiz, players: updatedPlayers, status: 'results' } });
+      await supabase
+        .from('quizzes')
+        .update({ status: 'results' })
+        .eq('id', quiz.id);
     } else {
-      set({
-        quiz: { ...quiz, players: updatedPlayers, currentQuestionIndex: nextIndex, startedAt: Date.now() },
-      });
+      await supabase
+        .from('quizzes')
+        .update({
+          current_question_index: nextIndex,
+          started_at: new Date().toISOString(),
+        })
+        .eq('id', quiz.id);
     }
   },
 
-  submitAnswer: (playerId, questionId, selectedIndex, timeMs) => {
-    const { quiz } = get();
+  submitAnswer: async (questionId, selectedIndex, timeMs) => {
+    const { quiz, sessionId } = get();
     if (!quiz) return;
+
+    const myPlayer = quiz.players.find(p => p.sessionId === sessionId);
+    if (!myPlayer) return;
+
     const question = quiz.questions.find(q => q.id === questionId);
     if (!question) return;
 
     const correct = selectedIndex === question.correctIndex;
     const points = correct ? Math.max(100, Math.round(1000 - timeMs / 10)) : 0;
 
-    set({
-      quiz: {
-        ...quiz,
-        players: quiz.players.map(p =>
-          p.id === playerId
-            ? {
-                ...p,
-                score: p.score + points,
-                answers: [...p.answers, { questionId, selectedIndex, timeMs }],
-              }
-            : p
-        ),
-      },
+    // Insert answer
+    await supabase.from('answers').insert({
+      player_id: myPlayer.id,
+      quiz_id: quiz.id,
+      question_id: questionId,
+      selected_index: selectedIndex,
+      time_ms: timeMs,
+      points,
     });
+
+    // Update player score
+    await supabase
+      .from('players')
+      .update({ score: myPlayer.score + points })
+      .eq('id', myPlayer.id);
   },
 
-  kickPlayer: (playerId) => {
-    const { quiz } = get();
-    if (!quiz) return;
-    set({ quiz: { ...quiz, players: quiz.players.filter(p => p.id !== playerId) } });
+  kickPlayer: async (playerId) => {
+    await supabase.from('players').delete().eq('id', playerId);
   },
 
-  resetLeaderboard: () => {
+  endQuiz: async () => {
     const { quiz } = get();
     if (!quiz) return;
-    set({
-      quiz: {
-        ...quiz,
-        players: quiz.players.map(p => ({ ...p, score: 0, answers: [] })),
-      },
-    });
-  },
-
-  endQuiz: () => {
-    const { quiz } = get();
-    if (!quiz) return;
-    set({ quiz: { ...quiz, status: 'results' } });
+    await supabase
+      .from('quizzes')
+      .update({ status: 'results' })
+      .eq('id', quiz.id);
   },
 
   getLeaderboard: () => {
@@ -227,13 +330,56 @@ export const useQuizStore = create<QuizStore>()(persist((set, get) => ({
     if (!quiz || quiz.currentQuestionIndex < 0) return null;
     return quiz.questions[quiz.currentQuestionIndex] || null;
   },
-}), {
-  name: 'quizwhiz-store',
-  partialize: (state) => ({ quiz: state.quiz }),
-}));
 
-// Restore session player ID on load
-const savedId = getSessionPlayerId();
-if (savedId) {
-  useQuizStore.setState({ currentPlayerId: savedId });
-}
+  getMyPlayer: () => {
+    const { quiz, sessionId } = get();
+    if (!quiz) return null;
+    return quiz.players.find(p => p.sessionId === sessionId) || null;
+  },
+
+  subscribeToQuiz: (quizId: string) => {
+    const channel = supabase
+      .channel(`quiz-${quizId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quizzes', filter: `id=eq.${quizId}` }, (payload) => {
+        const data = payload.new as any;
+        if (!data) return;
+        set(state => {
+          if (!state.quiz) return state;
+          return {
+            quiz: {
+              ...state.quiz,
+              status: data.status,
+              currentQuestionIndex: data.current_question_index,
+              startedAt: data.started_at ? new Date(data.started_at).getTime() : undefined,
+            },
+          };
+        });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `quiz_id=eq.${quizId}` }, () => {
+        // Refetch players on any change
+        supabase.from('players').select('*').eq('quiz_id', quizId).order('created_at', { ascending: true }).then(({ data }) => {
+          if (!data) return;
+          set(state => {
+            if (!state.quiz) return state;
+            return {
+              quiz: {
+                ...state.quiz,
+                players: data.map(p => ({
+                  id: p.id,
+                  name: p.name,
+                  score: p.score,
+                  isHost: p.is_host,
+                  sessionId: p.session_id,
+                })),
+              },
+            };
+          });
+        });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
+}));

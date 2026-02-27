@@ -3,21 +3,26 @@ import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuizStore } from '@/lib/quiz-store';
 import confetti from 'canvas-confetti';
-import { Trophy, Home, RotateCcw, Crown } from 'lucide-react';
+import { Trophy, Home, RotateCcw, Crown, Loader2 } from 'lucide-react';
 
 const Results = () => {
   const navigate = useNavigate();
   const { code } = useParams();
   const quiz = useQuizStore(s => s.quiz);
-  const currentPlayerId = useQuizStore(s => s.currentPlayerId);
+  const sessionId = useQuizStore(s => s.sessionId);
+  const fetchQuiz = useQuizStore(s => s.fetchQuiz);
   const getLeaderboard = useQuizStore(s => s.getLeaderboard);
 
+  useEffect(() => {
+    if (code) fetchQuiz(code);
+  }, [code]);
+
   const leaderboard = getLeaderboard();
-  const isHost = quiz?.players.find(p => p.id === currentPlayerId)?.isHost;
+  const isHost = quiz?.players.find(p => p.sessionId === sessionId)?.isHost;
   const winner = leaderboard[0];
 
   useEffect(() => {
-    // Winner confetti
+    if (!winner) return;
     const duration = 3000;
     const end = Date.now() + duration;
     const frame = () => {
@@ -26,15 +31,12 @@ const Results = () => {
       if (Date.now() < end) requestAnimationFrame(frame);
     };
     frame();
-  }, []);
+  }, [winner]);
 
   if (!quiz) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="font-display text-2xl font-bold text-foreground mb-4">No results</h2>
-          <button onClick={() => navigate('/')} className="text-primary underline">Go home</button>
-        </div>
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -78,7 +80,7 @@ const Results = () => {
               animate={{ x: 0, opacity: 1 }}
               transition={{ delay: 0.5 + i * 0.08 }}
               className={`flex items-center justify-between px-4 py-3 rounded-xl ${
-                player.id === currentPlayerId ? 'bg-primary/20 border border-primary/40' : 'bg-card border border-border'
+                player.sessionId === sessionId ? 'bg-primary/20 border border-primary/40' : 'bg-card border border-border'
               }`}
             >
               <div className="flex items-center gap-3">
