@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { Question, getRandomQuestions, generateQuizCode } from '@/data/questions';
 
 export interface Player {
@@ -43,7 +44,7 @@ function generateId(): string {
 // Simulated bot players for demo
 const botNames = ['Alex', 'Jordan', 'Sam', 'Taylor', 'Casey', 'Morgan', 'Riley', 'Quinn'];
 
-export const useQuizStore = create<QuizStore>((set, get) => ({
+export const useQuizStore = create<QuizStore>()(persist((set, get) => ({
   quiz: null,
   currentPlayerId: null,
 
@@ -198,4 +199,7 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
     if (!quiz || quiz.currentQuestionIndex < 0) return null;
     return quiz.questions[quiz.currentQuestionIndex] || null;
   },
+}), {
+  name: 'quizwhiz-store',
+  partialize: (state) => ({ quiz: state.quiz, currentPlayerId: state.currentPlayerId }),
 }));

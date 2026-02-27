@@ -229,9 +229,10 @@ const QuizPlay = () => {
         </div>
 
         {/* Result feedback */}
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {showResult && (
             <motion.div
+              key="result-feedback"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
