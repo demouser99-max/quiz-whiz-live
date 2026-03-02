@@ -34,7 +34,7 @@ interface QuizStore {
   sessionId: string;
   loading: boolean;
   error: string | null;
-  playerAnswers: Record<string, Answer[]>; // playerId -> answers
+  playerAnswers: Record<string, Answer[]>;
 
   createQuiz: (title: string, numQuestions: number, timePerQuestion: number) => Promise<string>;
   joinQuiz: (code: string, name: string) => Promise<{ success: boolean; error?: string }>;
@@ -86,7 +86,6 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
 
     if (quizError || !quizData) throw new Error(quizError?.message || 'Failed to create quiz');
 
-    // Add host as player
     const { data: playerData, error: playerError } = await supabase
       .from('players')
       .insert({
@@ -126,7 +125,6 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
   joinQuiz: async (code, name) => {
     const sessionId = get().sessionId;
 
-    // Fetch quiz
     const { data: quizData, error: quizError } = await supabase
       .from('quizzes')
       .select('*')
@@ -141,7 +139,6 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
       return { success: false, error: 'Quiz has already started.' };
     }
 
-    // Check for duplicate name
     const { data: existingPlayers } = await supabase
       .from('players')
       .select('*')
@@ -151,15 +148,12 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
       return { success: false, error: 'Name already taken. Choose a different name.' };
     }
 
-    // Check if this session already joined
     const existingPlayer = existingPlayers?.find(p => p.session_id === sessionId);
     if (existingPlayer) {
-      // Already joined, just load the quiz
       await get().fetchQuiz(code);
       return { success: true };
     }
 
-    // Add player
     const { error: playerError } = await supabase
       .from('players')
       .insert({
@@ -289,21 +283,40 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
     const correct = selectedIndex === question.correctIndex;
     const points = correct ? Math.max(100, Math.round(1000 - timeMs / 10)) : 0;
 
-    // Insert answer
-    await supabase.from('answers').insert({
+    // Fire and forget - don't await to prevent UI blocking
+    supabase.from('answers').insert({
       player_id: myPlayer.id,
       quiz_id: quiz.id,
       question_id: questionId,
       selected_index: selectedIndex,
       time_ms: timeMs,
       points,
+    }).then(({ error }) => {
+      if (error) console.error('Failed to submit answer:', error);
     });
 
-    // Update player score
-    await supabase
+    // Update score optimistically in local state
+    const newScore = myPlayer.score + points;
+    set(state => {
+      if (!state.quiz) return state;
+      return {
+        quiz: {
+          ...state.quiz,
+          players: state.quiz.players.map(p =>
+            p.id === myPlayer.id ? { ...p, score: newScore } : p
+          ),
+        },
+      };
+    });
+
+    // Update score in DB (fire and forget)
+    supabase
       .from('players')
-      .update({ score: myPlayer.score + points })
-      .eq('id', myPlayer.id);
+      .update({ score: newScore })
+      .eq('id', myPlayer.id)
+      .then(({ error }) => {
+        if (error) console.error('Failed to update score:', error);
+      });
   },
 
   kickPlayer: async (playerId) => {
@@ -340,7 +353,12 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
   subscribeToQuiz: (quizId: string) => {
     const channel = supabase
       .channel(`quiz-${quizId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'quizzes', filter: `id=eq.${quizId}` }, (payload) => {
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'quizzes',
+        filter: `id=eq.${quizId}`,
+      }, (payload) => {
         const data = payload.new as any;
         if (!data) return;
         set(state => {
@@ -355,7 +373,12 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
           };
         });
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `quiz_id=eq.${quizId}` }, () => {
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'players',
+        filter: `quiz_id=eq.${quizId}`,
+      }, () => {
         // Refetch players on any change
         supabase.from('players').select('*').eq('quiz_id', quizId).order('created_at', { ascending: true }).then(({ data }) => {
           if (!data) return;
@@ -376,7 +399,18 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
           });
         });
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          // Auto-reconnect after 2 seconds
+          setTimeout(() => {
+            supabase.removeChannel(channel);
+            const store = get();
+            if (store.quiz?.id === quizId) {
+              store.subscribeToQuiz(quizId);
+            }
+          }, 2000);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);

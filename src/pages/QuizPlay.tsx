@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuizStore } from '@/lib/quiz-store';
@@ -17,6 +17,8 @@ const optionLabels = ['A', 'B', 'C', 'D'];
 const QuizPlay = () => {
   const navigate = useNavigate();
   const { code } = useParams();
+
+  // Use individual selectors to minimize re-renders
   const quiz = useQuizStore(s => s.quiz);
   const sessionId = useQuizStore(s => s.sessionId);
   const fetchQuiz = useQuizStore(s => s.fetchQuiz);
@@ -32,10 +34,13 @@ const QuizPlay = () => {
   const [answerStartTime, setAnswerStartTime] = useState(0);
   const [showResult, setShowResult] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const prevQuestionIndexRef = useRef<number>(-999);
 
   const question = getCurrentQuestion();
   const myPlayer = quiz?.players.find(p => p.sessionId === sessionId);
   const isHost = myPlayer?.isHost;
+  const currentQuestionIndex = quiz?.currentQuestionIndex ?? -1;
 
   // Fetch and subscribe
   useEffect(() => {
@@ -57,13 +62,24 @@ const QuizPlay = () => {
     }
   }, [quiz?.status, navigate, code]);
 
-  // Timer
+  // Reset local state when question index changes (works for both host and non-host)
   useEffect(() => {
-    if (!quiz || !question || showResult || showLeaderboard) return;
-    setTimeLeft(quiz.timePerQuestion);
-    setSelectedAnswer(null);
-    setShowResult(false);
-    setAnswerStartTime(Date.now());
+    if (currentQuestionIndex === prevQuestionIndexRef.current) return;
+    prevQuestionIndexRef.current = currentQuestionIndex;
+
+    if (currentQuestionIndex >= 0 && quiz) {
+      setSelectedAnswer(null);
+      setShowResult(false);
+      setShowLeaderboard(false);
+      setSubmitting(false);
+      setTimeLeft(quiz.timePerQuestion);
+      setAnswerStartTime(Date.now());
+    }
+  }, [currentQuestionIndex, quiz?.timePerQuestion]);
+
+  // Timer - driven by timeLeft state, resets via the effect above
+  useEffect(() => {
+    if (!quiz || !question || showResult || showLeaderboard || currentQuestionIndex < 0) return;
 
     const interval = setInterval(() => {
       setTimeLeft(prev => {
@@ -77,33 +93,34 @@ const QuizPlay = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [quiz?.currentQuestionIndex]);
+  }, [currentQuestionIndex, showResult, showLeaderboard]);
 
-  const handleAnswer = async (index: number) => {
-    if (selectedAnswer !== null || showResult || !question) return;
+  const handleAnswer = useCallback(async (index: number) => {
+    if (selectedAnswer !== null || showResult || !question || submitting) return;
+    setSubmitting(true);
     const timeMs = Date.now() - answerStartTime;
     setSelectedAnswer(index);
+
     await submitAnswer(question.id, index, timeMs);
 
     if (index === question.correctIndex) {
       confetti({ particleCount: 30, spread: 50, origin: { y: 0.7 } });
     }
 
+    setSubmitting(false);
     setTimeout(() => setShowResult(true), 800);
-  };
+  }, [selectedAnswer, showResult, question, submitting, answerStartTime, submitAnswer]);
 
-  const handleNext = async () => {
+  const handleNext = useCallback(async () => {
     setShowResult(false);
     setShowLeaderboard(false);
     await nextQuestion();
-    // Refetch to get updated scores
-    if (code) await fetchQuiz(code);
-  };
+  }, [nextQuestion]);
 
-  const handleShowLeaderboard = async () => {
-    if (code) await fetchQuiz(code); // get latest scores
+  const handleShowLeaderboard = useCallback(async () => {
+    if (code) await fetchQuiz(code);
     setShowLeaderboard(true);
-  };
+  }, [code, fetchQuiz]);
 
   if (!quiz || !question) {
     return (
@@ -162,6 +179,10 @@ const QuizPlay = () => {
               <ChevronRight className="w-5 h-5" />
               Next Question
             </motion.button>
+          )}
+
+          {!isHost && (
+            <p className="text-center text-muted-foreground animate-pulse">Waiting for host...</p>
           )}
         </motion.div>
       </div>
@@ -232,14 +253,14 @@ const QuizPlay = () => {
 
             return (
               <motion.button
-                key={i}
+                key={`${currentQuestionIndex}-${i}`}
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.08 }}
                 whileHover={!showResult && selectedAnswer === null ? { scale: 1.02 } : {}}
                 whileTap={!showResult && selectedAnswer === null ? { scale: 0.97 } : {}}
                 onClick={() => handleAnswer(i)}
-                disabled={showResult || selectedAnswer !== null}
+                disabled={showResult || selectedAnswer !== null || submitting}
                 className={`${optionColors[i]} ${extraClasses} p-5 rounded-xl text-left transition-all duration-300 flex items-start gap-3`}
               >
                 <span className="w-8 h-8 rounded-lg bg-background/20 flex items-center justify-center font-bold text-sm shrink-0">
@@ -278,6 +299,10 @@ const QuizPlay = () => {
                 >
                   <Trophy className="w-4 h-4" /> Show Leaderboard
                 </motion.button>
+              )}
+
+              {!isHost && (
+                <p className="mt-4 text-muted-foreground animate-pulse text-sm">Waiting for host to continue...</p>
               )}
             </motion.div>
           )}
