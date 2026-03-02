@@ -2,7 +2,7 @@
 
 ## Project info
 
-**URL**: https://https://smart-quizwhiz.lovable.app
+**URL**: https://smart-quizwhiz.lovable.app
 
 ## How can I edit this code?
 
