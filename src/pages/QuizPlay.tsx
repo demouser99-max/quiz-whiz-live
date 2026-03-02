@@ -6,7 +6,7 @@ import { playCorrectSound, playWrongSound, playTickSound, playCountdownUrgent, p
 import CircularTimer from '@/components/CircularTimer';
 import AnimatedLeaderboard from '@/components/AnimatedLeaderboard';
 import confetti from 'canvas-confetti';
-import { Trophy, Square, ChevronRight, Loader2, Sparkles } from 'lucide-react';
+import { Trophy, Square, ChevronRight, Sparkles, Lock, CheckCircle2 } from 'lucide-react';
 
 const optionColors = [
   { bg: 'bg-quiz-red', hover: 'hover-quiz-red', glow: 'hsl(var(--quiz-red) / 0.4)' },
@@ -33,11 +33,12 @@ const QuizPlay = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [answerStartTime, setAnswerStartTime] = useState(0);
+  const [lockedIn, setLockedIn] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [answerResult, setAnswerResult] = useState<'correct' | 'wrong' | 'timeout' | null>(null);
   const prevQuestionIndexRef = useRef<number>(-999);
+  const hasSubmittedRef = useRef(false);
 
   const question = getCurrentQuestion();
   const myPlayer = quiz?.players.find(p => p.sessionId === sessionId);
@@ -69,46 +70,33 @@ const QuizPlay = () => {
 
     if (currentQuestionIndex >= 0 && quiz) {
       setSelectedAnswer(null);
+      setLockedIn(false);
       setShowResult(false);
       setShowLeaderboard(false);
-      setSubmitting(false);
       setAnswerResult(null);
       setTimeLeft(quiz.timePerQuestion);
       setAnswerStartTime(Date.now());
+      hasSubmittedRef.current = false;
       playTransitionSound();
     }
   }, [currentQuestionIndex, quiz?.timePerQuestion]);
 
-  // Timer with sound effects
-  useEffect(() => {
-    if (!quiz || !question || showResult || showLeaderboard || currentQuestionIndex < 0) return;
+  // Submit answer helper (called on lock-in or timeout)
+  const finalizeAnswer = useCallback(async (selected: number | null) => {
+    if (hasSubmittedRef.current || !question) return;
+    hasSubmittedRef.current = true;
 
-    const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setAnswerResult('timeout');
-          setShowResult(true);
-          return 0;
-        }
-        // Sound cues
-        if (prev <= 6 && prev > 1) playCountdownUrgent();
-        else if (prev % 5 === 0) playTickSound();
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [currentQuestionIndex, showResult, showLeaderboard]);
-
-  const handleAnswer = useCallback(async (index: number) => {
-    if (selectedAnswer !== null || showResult || !question || submitting) return;
-    setSubmitting(true);
     const timeMs = Date.now() - answerStartTime;
-    setSelectedAnswer(index);
 
-    const isCorrect = index === question.correctIndex;
+    if (selected === null) {
+      // Timeout with no selection
+      playWrongSound();
+      setAnswerResult('timeout');
+      setShowResult(true);
+      return;
+    }
 
+    const isCorrect = selected === question.correctIndex;
     if (isCorrect) {
       playCorrectSound();
       setAnswerResult('correct');
@@ -118,10 +106,47 @@ const QuizPlay = () => {
       setAnswerResult('wrong');
     }
 
-    await submitAnswer(question.id, index, timeMs);
-    setSubmitting(false);
-    setTimeout(() => setShowResult(true), 900);
-  }, [selectedAnswer, showResult, question, submitting, answerStartTime, submitAnswer]);
+    await submitAnswer(question.id, selected, timeMs);
+    setTimeout(() => setShowResult(true), 600);
+  }, [question, answerStartTime, submitAnswer]);
+
+  // Timer
+  useEffect(() => {
+    if (!quiz || !question || showResult || showLeaderboard || currentQuestionIndex < 0) return;
+
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          // Time's up — finalize whatever is selected
+          const currentSelected = selectedAnswer;
+          if (!hasSubmittedRef.current) {
+            // Use setTimeout to avoid state update during render
+            setTimeout(() => finalizeAnswer(currentSelected), 0);
+          }
+          return 0;
+        }
+        if (prev <= 6 && prev > 1) playCountdownUrgent();
+        else if (prev % 5 === 0) playTickSound();
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentQuestionIndex, showResult, showLeaderboard, finalizeAnswer, selectedAnswer]);
+
+  // Select an answer (just highlight, no submission)
+  const handleSelect = useCallback((index: number) => {
+    if (lockedIn || showResult) return;
+    setSelectedAnswer(prev => prev === index ? null : index); // Toggle selection
+  }, [lockedIn, showResult]);
+
+  // Lock in the selected answer
+  const handleLockIn = useCallback(async () => {
+    if (selectedAnswer === null || lockedIn || showResult) return;
+    setLockedIn(true);
+    await finalizeAnswer(selectedAnswer);
+  }, [selectedAnswer, lockedIn, showResult, finalizeAnswer]);
 
   const handleNext = useCallback(async () => {
     setShowResult(false);
@@ -251,6 +276,9 @@ const QuizPlay = () => {
               } else {
                 stateClass = 'opacity-30 scale-[0.97]';
               }
+            } else if (isSelected && lockedIn) {
+              stateClass = 'ring-2 ring-primary scale-[1.02]';
+              glowStyle = { boxShadow: `0 0 25px ${optionColors[i].glow}, 0 0 10px hsl(var(--primary) / 0.3)` };
             } else if (isSelected) {
               stateClass = 'ring-2 ring-foreground/50 scale-[1.02]';
               glowStyle = { boxShadow: `0 0 20px ${optionColors[i].glow}` };
@@ -262,19 +290,20 @@ const QuizPlay = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.06, duration: 0.2 }}
-                whileHover={!showResult && selectedAnswer === null ? {
+                whileHover={!showResult && !lockedIn ? {
                   scale: 1.03,
                   boxShadow: `0 0 25px ${optionColors[i].glow}`,
                 } : {}}
-                whileTap={!showResult && selectedAnswer === null ? { scale: 0.96 } : {}}
-                onClick={() => handleAnswer(i)}
-                disabled={showResult || selectedAnswer !== null || submitting}
+                whileTap={!showResult && !lockedIn ? { scale: 0.96 } : {}}
+                onClick={() => handleSelect(i)}
+                disabled={showResult || lockedIn}
                 style={glowStyle}
                 className={`${optionColors[i].bg} ${optionColors[i].hover} ${stateClass} p-4 sm:p-5 rounded-xl text-left transition-all duration-200 flex items-start gap-3 relative overflow-hidden`}
               >
                 {/* Ripple on select */}
-                {isSelected && !showResult && (
+                {isSelected && !showResult && !lockedIn && (
                   <motion.div
+                    key={`ripple-${selectedAnswer}-${i}`}
                     initial={{ scale: 0, opacity: 0.5 }}
                     animate={{ scale: 4, opacity: 0 }}
                     transition={{ duration: 0.5 }}
@@ -289,6 +318,28 @@ const QuizPlay = () => {
                 <span className="font-medium text-primary-foreground text-base sm:text-lg relative z-10">
                   {option}
                 </span>
+
+                {/* Selected indicator (before lock-in) */}
+                {isSelected && !showResult && !lockedIn && (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="ml-auto flex items-center"
+                  >
+                    <CheckCircle2 className="w-6 h-6 text-primary-foreground" />
+                  </motion.span>
+                )}
+
+                {/* Locked indicator */}
+                {isSelected && lockedIn && !showResult && (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="ml-auto flex items-center"
+                  >
+                    <Lock className="w-5 h-5 text-primary-foreground" />
+                  </motion.span>
+                )}
 
                 {/* Checkmark for correct */}
                 {showResult && isCorrect && (
@@ -316,6 +367,40 @@ const QuizPlay = () => {
             );
           })}
         </div>
+
+        {/* Lock In Button */}
+        <AnimatePresence>
+          {selectedAnswer !== null && !lockedIn && !showResult && (
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.9 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              className="mt-6"
+            >
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleLockIn}
+                className="px-8 py-4 rounded-xl bg-primary text-primary-foreground font-display font-bold text-lg glow-primary flex items-center gap-3 mx-auto"
+              >
+                <Lock className="w-5 h-5" />
+                Lock In Answer
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Locked-in waiting state */}
+        {lockedIn && !showResult && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-6 text-muted-foreground animate-pulse-glow text-sm text-center"
+          >
+            Answer locked in! Waiting for result...
+          </motion.p>
+        )}
 
         {/* Result feedback */}
         <AnimatePresence mode="wait">
