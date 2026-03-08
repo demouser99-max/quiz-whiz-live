@@ -1,10 +1,14 @@
-import { useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuizStore } from '@/lib/quiz-store';
+import { useGamification } from '@/lib/gamification';
 import AnimatedLeaderboard from '@/components/AnimatedLeaderboard';
+import NewBadgeToast from '@/components/NewBadgeToast';
+import ThemeToggle from '@/components/ThemeToggle';
 import confetti from 'canvas-confetti';
-import { Trophy, Home, RotateCcw, Crown, Sparkles } from 'lucide-react';
+import { Trophy, Home, RotateCcw, Crown, Sparkles, Star, Share2 } from 'lucide-react';
+import type { Badge } from '@/lib/gamification';
 
 const Results = () => {
   const navigate = useNavigate();
@@ -13,6 +17,14 @@ const Results = () => {
   const sessionId = useQuizStore(s => s.sessionId);
   const fetchQuiz = useQuizStore(s => s.fetchQuiz);
   const getLeaderboard = useQuizStore(s => s.getLeaderboard);
+  const playerAnswers = useQuizStore(s => s.playerAnswers);
+  const recordQuizResult = useGamification(s => s.recordQuizResult);
+  const gamBadges = useGamification(s => s.badges);
+  const xp = useGamification(s => s.xp);
+  const level = useGamification(s => s.level);
+
+  const [newBadge, setNewBadge] = useState<Badge | null>(null);
+  const recordedRef = useRef(false);
 
   useEffect(() => {
     if (code) fetchQuiz(code);
@@ -20,6 +32,30 @@ const Results = () => {
 
   const leaderboard = getLeaderboard();
   const winner = leaderboard[0];
+  const myPlayer = quiz?.players.find(p => p.sessionId === sessionId);
+
+  // Record gamification result once
+  useEffect(() => {
+    if (!quiz || !myPlayer || recordedRef.current) return;
+    recordedRef.current = true;
+
+    const badgesBefore = gamBadges.map(b => b.id);
+    const myAnswers = playerAnswers[myPlayer.id] || [];
+    const correct = myAnswers.filter(a => a.points > 0).length;
+    const total = quiz.questions.length;
+    const won = winner?.id === myPlayer.id;
+
+    recordQuizResult(correct, total, won);
+
+    // Check for new badges after a tick
+    setTimeout(() => {
+      const current = useGamification.getState().badges;
+      const newOnes = current.filter(b => !badgesBefore.includes(b.id));
+      if (newOnes.length > 0) {
+        setNewBadge(newOnes[0]);
+      }
+    }, 500);
+  }, [quiz, myPlayer]);
 
   useEffect(() => {
     if (!winner) return;
@@ -32,6 +68,16 @@ const Results = () => {
     };
     frame();
   }, [winner]);
+
+  const handleShare = () => {
+    if (!quiz || !myPlayer) return;
+    const text = `I scored ${myPlayer.score} points on "${quiz.title}" on QuizWhiz! 🎯`;
+    if (navigator.share) {
+      navigator.share({ title: 'QuizWhiz Result', text, url: window.location.origin });
+    } else {
+      navigator.clipboard.writeText(text);
+    }
+  };
 
   if (!quiz) {
     return (
@@ -46,6 +92,10 @@ const Results = () => {
 
   return (
     <div className="min-h-screen bg-background bg-particles flex flex-col items-center px-4 py-8">
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -91,6 +141,32 @@ const Results = () => {
           </motion.div>
         )}
 
+        {/* XP Gained */}
+        {myPlayer && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="glass rounded-xl p-4 mb-6 flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <Star className="w-6 h-6 text-quiz-yellow" />
+              <div>
+                <p className="font-display font-semibold text-foreground">Level {level}</p>
+                <p className="text-xs text-muted-foreground">{xp} total XP</p>
+              </div>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleShare}
+              className="px-3 py-2 rounded-lg glass text-sm text-foreground flex items-center gap-2 hover:bg-secondary/80 transition-colors"
+            >
+              <Share2 className="w-4 h-4" /> Share
+            </motion.button>
+          </motion.div>
+        )}
+
         {/* Full leaderboard */}
         <AnimatedLeaderboard players={quiz.players} sessionId={sessionId} />
 
@@ -118,6 +194,13 @@ const Results = () => {
           </motion.button>
         </motion.div>
       </motion.div>
+
+      {/* New badge toast */}
+      <AnimatePresence>
+        {newBadge && (
+          <NewBadgeToast badge={newBadge} onClose={() => setNewBadge(null)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

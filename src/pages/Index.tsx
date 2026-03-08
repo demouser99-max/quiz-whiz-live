@@ -1,17 +1,33 @@
+import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Users, Trophy, Globe, Sparkles } from 'lucide-react';
+import { Zap, Users, Trophy, Globe, Sparkles, Flame, Star, Award } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle';
+import PlayerStats from '@/components/PlayerStats';
+import BadgeShowcase from '@/components/BadgeShowcase';
+import { useGamification } from '@/lib/gamification';
 
 const Index = () => {
   const navigate = useNavigate();
+  const checkStreak = useGamification(s => s.checkStreak);
+  const quizzesPlayed = useGamification(s => s.quizzesPlayed);
+
+  useEffect(() => {
+    checkStreak();
+  }, []);
 
   return (
-    <div className="min-h-screen bg-background bg-particles flex flex-col items-center justify-center px-4 overflow-hidden relative">
+    <div className="min-h-screen bg-background bg-particles flex flex-col items-center px-4 py-8 overflow-hidden relative">
+      {/* Theme toggle */}
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="relative z-10 text-center max-w-2xl"
+        className="relative z-10 text-center max-w-2xl mt-8"
       >
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
@@ -60,12 +76,12 @@ const Index = () => {
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4, duration: 0.6 }}
-        className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-4 mt-20 max-w-3xl w-full"
+        className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-4 mt-16 max-w-3xl w-full"
       >
         {[
           { icon: Zap, title: 'Instant Play', desc: 'No signup needed. Just a name and a code.', color: 'text-neon-cyan' },
           { icon: Trophy, title: 'Live Scoring', desc: 'Faster answers earn more points.', color: 'text-quiz-yellow' },
-          { icon: Globe, title: 'Play Anywhere', desc: 'Compete with anyone worldwide.', color: 'text-primary' },
+          { icon: Award, title: 'Earn Badges', desc: 'Unlock achievements and climb levels.', color: 'text-primary' },
         ].map((f, i) => (
           <motion.div
             key={i}
@@ -78,6 +94,14 @@ const Index = () => {
           </motion.div>
         ))}
       </motion.div>
+
+      {/* Gamification section */}
+      {quizzesPlayed > 0 && (
+        <div className="relative z-10 mt-12 w-full flex flex-col items-center gap-6">
+          <PlayerStats />
+          <BadgeShowcase />
+        </div>
+      )}
     </div>
   );
 };
