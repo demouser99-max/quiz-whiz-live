@@ -10,6 +10,10 @@ import JoinQuiz from "./pages/JoinQuiz";
 import Lobby from "./pages/Lobby";
 import QuizPlay from "./pages/QuizPlay";
 import Results from "./pages/Results";
+import SoloTopicSelect from "./pages/SoloTopicSelect";
+import SoloSetup from "./pages/SoloSetup";
+import SoloPlay from "./pages/SoloPlay";
+import SoloResults from "./pages/SoloResults";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +33,10 @@ const App = () => (
             <Route path="/lobby/:code" element={<Lobby />} />
             <Route path="/play/:code" element={<QuizPlay />} />
             <Route path="/results/:code" element={<Results />} />
+            <Route path="/solo" element={<SoloTopicSelect />} />
+            <Route path="/solo/setup/:topic" element={<SoloSetup />} />
+            <Route path="/solo/play" element={<SoloPlay />} />
+            <Route path="/solo/results" element={<SoloResults />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

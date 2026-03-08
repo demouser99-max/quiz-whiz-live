@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Users, Trophy, Globe, Sparkles, Flame, Star, Award } from 'lucide-react';
+import { Zap, Users, Trophy, Globe, Sparkles, Award, BookOpen } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import PlayerStats from '@/components/PlayerStats';
 import BadgeShowcase from '@/components/BadgeShowcase';
@@ -49,6 +49,16 @@ const Index = () => {
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <motion.button
+            whileHover={{ scale: 1.03, boxShadow: '0 0 30px hsl(170 75% 45% / 0.5)' }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => navigate('/solo')}
+            className="px-8 py-4 rounded-xl bg-accent text-accent-foreground font-display font-semibold text-lg glow-accent flex items-center justify-center gap-2 transition-all"
+          >
+            <BookOpen className="w-5 h-5" />
+            Play Solo
+          </motion.button>
+
           <motion.button
             whileHover={{ scale: 1.03, boxShadow: '0 0 30px hsl(270 85% 62% / 0.5)' }}
             whileTap={{ scale: 0.97 }}
