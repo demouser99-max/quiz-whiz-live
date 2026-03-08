@@ -30,6 +30,7 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
+          <BuiltByButton />
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Welcome />} />
