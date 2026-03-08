@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Crown } from 'lucide-react';
+import { Crown } from 'lucide-react';
 import { Player } from '@/lib/quiz-store';
 import { useEffect, useState } from 'react';
 
@@ -19,7 +19,7 @@ const CountUpScore = ({ target, duration = 600 }: { target: number; duration?: n
     const animate = (now: number) => {
       const elapsed = now - start;
       const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
       setCurrent(Math.round(startVal + (target - startVal) * eased));
       if (progress < 1) requestAnimationFrame(animate);
     };
@@ -31,7 +31,6 @@ const CountUpScore = ({ target, duration = 600 }: { target: number; duration?: n
 
 const AnimatedLeaderboard = ({ players, sessionId, maxShow = 8 }: AnimatedLeaderboardProps) => {
   const sorted = [...players].sort((a, b) => b.score - a.score).slice(0, maxShow);
-
   const medals = ['🥇', '🥈', '🥉'];
 
   return (
@@ -51,36 +50,26 @@ const AnimatedLeaderboard = ({ players, sessionId, maxShow = 8 }: AnimatedLeader
                 layout: { type: 'spring', stiffness: 500, damping: 35 },
                 delay: i * 0.05,
               }}
-              className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300 ${
+              className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-300 ${
                 isMe
-                  ? 'glass border-2 border-primary/50 animate-glow-border'
-                  : 'glass border border-border/50'
+                  ? 'glass-premium border border-primary/40 animate-glow-border'
+                  : 'glass-premium'
               }`}
             >
               <div className="flex items-center gap-3">
-                <motion.span
-                  layout
-                  className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
-                    i === 0
-                      ? 'bg-quiz-yellow/20 text-quiz-yellow'
-                      : i === 1
-                      ? 'bg-muted-foreground/20 text-muted-foreground'
-                      : i === 2
-                      ? 'bg-quiz-red/20 text-quiz-red'
-                      : 'bg-secondary text-muted-foreground'
-                  }`}
-                >
+                <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${
+                  i === 0 ? 'bg-gold/20 text-gold' :
+                  i === 1 ? 'bg-silver/20 text-silver' :
+                  i === 2 ? 'bg-bronze/20 text-bronze' :
+                  'bg-secondary text-muted-foreground'
+                }`}>
                   {i < 3 ? medals[i] : i + 1}
-                </motion.span>
+                </span>
                 <div className="flex items-center gap-2">
                   <span className="text-foreground font-medium">{player.name}</span>
-                  {player.isHost && (
-                    <Crown className="w-3.5 h-3.5 text-quiz-yellow" />
-                  )}
+                  {player.isHost && <Crown className="w-3.5 h-3.5 text-quiz-yellow" />}
                   {isMe && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/20 text-primary font-semibold">
-                      YOU
-                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-bold">YOU</span>
                   )}
                 </div>
               </div>

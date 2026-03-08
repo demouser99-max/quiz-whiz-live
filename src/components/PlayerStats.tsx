@@ -13,10 +13,10 @@ const PlayerStats = () => {
   if (quizzesPlayed === 0) return null;
 
   const stats = [
-    { icon: Star, label: 'Level', value: level, color: 'text-quiz-yellow' },
-    { icon: Flame, label: 'Streak', value: `${streak}d`, color: 'text-quiz-red' },
-    { icon: Trophy, label: 'Played', value: quizzesPlayed, color: 'text-primary' },
-    { icon: Brain, label: 'XP', value: xp, color: 'text-accent' },
+    { icon: Star, label: 'Level', value: level, color: 'text-quiz-yellow', bg: 'bg-quiz-yellow/10' },
+    { icon: Flame, label: 'Streak', value: `${streak}d`, color: 'text-destructive', bg: 'bg-destructive/10' },
+    { icon: Trophy, label: 'Played', value: quizzesPlayed, color: 'text-primary', bg: 'bg-primary/10' },
+    { icon: Brain, label: 'XP', value: xp, color: 'text-accent', bg: 'bg-accent/10' },
   ];
 
   return (
@@ -26,8 +26,9 @@ const PlayerStats = () => {
       transition={{ delay: 0.6 }}
       className="w-full max-w-3xl"
     >
-      <div className="glass rounded-2xl p-5">
-        <div className="grid grid-cols-4 gap-3 mb-3">
+      <div className="glass-premium rounded-2xl p-6">
+        <h3 className="font-display font-semibold text-foreground text-sm mb-4 text-center">Your Progress</h3>
+        <div className="grid grid-cols-4 gap-3 mb-4">
           {stats.map((s, i) => (
             <motion.div
               key={s.label}
@@ -36,7 +37,9 @@ const PlayerStats = () => {
               transition={{ delay: 0.7 + i * 0.05 }}
               className="text-center"
             >
-              <s.icon className={`w-5 h-5 ${s.color} mx-auto mb-1`} />
+              <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center mx-auto mb-2`}>
+                <s.icon className={`w-5 h-5 ${s.color}`} />
+              </div>
               <p className="font-mono font-bold text-foreground text-lg">{s.value}</p>
               <p className="text-xs text-muted-foreground">{s.label}</p>
             </motion.div>
@@ -44,16 +47,17 @@ const PlayerStats = () => {
         </div>
 
         {/* XP Progress bar */}
-        <div className="relative h-2 rounded-full bg-secondary overflow-hidden">
+        <div className="relative h-2.5 rounded-full bg-secondary/50 overflow-hidden">
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${xpProgress}%` }}
             transition={{ duration: 1, delay: 0.8, ease: 'easeOut' }}
-            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary to-accent"
+            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary via-accent to-primary"
+            style={{ backgroundSize: '200% 100%', animation: 'gradient-shift 3s ease-in-out infinite' }}
           />
         </div>
-        <p className="text-xs text-muted-foreground mt-1 text-center">
-          {Math.round(xpProgress)}% to Level {level + 1} ({xpForNext} XP needed)
+        <p className="text-xs text-muted-foreground mt-2 text-center">
+          {Math.round(xpProgress)}% to Level {level + 1} · {xpForNext} XP needed
         </p>
       </div>
     </motion.div>
