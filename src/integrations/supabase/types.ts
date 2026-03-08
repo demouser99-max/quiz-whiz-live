@@ -136,6 +136,39 @@ export type Database = {
         }
         Relationships: []
       }
+      solo_scores: {
+        Row: {
+          correct_answers: number
+          created_at: string
+          id: string
+          player_name: string
+          score: number
+          time_taken_ms: number
+          topic: string
+          total_questions: number
+        }
+        Insert: {
+          correct_answers: number
+          created_at?: string
+          id?: string
+          player_name: string
+          score?: number
+          time_taken_ms?: number
+          topic: string
+          total_questions: number
+        }
+        Update: {
+          correct_answers?: number
+          created_at?: string
+          id?: string
+          player_name?: string
+          score?: number
+          time_taken_ms?: number
+          topic?: string
+          total_questions?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
