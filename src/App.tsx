@@ -19,6 +19,7 @@ import SoloSetup from "./pages/SoloSetup";
 import SoloPlay from "./pages/SoloPlay";
 import SoloResults from "./pages/SoloResults";
 import NotFound from "./pages/NotFound";
+import { BuiltByButton } from "./components/BuiltByButton";
 
 const queryClient = new QueryClient();
 
