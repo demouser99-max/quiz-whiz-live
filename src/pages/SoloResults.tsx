@@ -6,8 +6,9 @@ import { useGamification } from '@/lib/gamification';
 import { supabase } from '@/integrations/supabase/client';
 import NewBadgeToast from '@/components/NewBadgeToast';
 import ThemeToggle from '@/components/ThemeToggle';
+import FloatingParticles from '@/components/FloatingParticles';
 import confetti from 'canvas-confetti';
-import { Trophy, Home, RotateCcw, Star, Share2, Medal, Clock, Target, ChevronRight } from 'lucide-react';
+import { Trophy, Home, RotateCcw, Star, Share2, Medal, Clock, Target, CheckCircle2, XCircle } from 'lucide-react';
 import { TOPICS } from '@/data/questions';
 import type { Badge } from '@/lib/gamification';
 
@@ -34,74 +35,68 @@ const SoloResults = () => {
   const percentage = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0;
   const topicInfo = TOPICS.find(t => t.id === topic);
 
-  // Save score and fetch leaderboard
   useEffect(() => {
     if (recordedRef.current || questions.length === 0) return;
     recordedRef.current = true;
 
     const badgesBefore = gamBadges.map(b => b.id);
-
     finishQuiz();
-    recordQuizResult(correctCount, questions.length, false); // solo never "wins" multiplayer
+    recordQuizResult(correctCount, questions.length, false);
 
-    // Check for new badges
     setTimeout(() => {
       const current = useGamification.getState().badges;
       const newOnes = current.filter(b => !badgesBefore.includes(b.id));
       if (newOnes.length > 0) setNewBadge(newOnes[0]);
     }, 500);
 
-    // Fetch leaderboard
     supabase
       .from('solo_scores')
       .select('player_name, score, correct_answers, total_questions')
       .eq('topic', topic)
       .order('score', { ascending: false })
       .limit(10)
-      .then(({ data }) => {
-        if (data) setLeaderboard(data);
-      });
+      .then(({ data }) => { if (data) setLeaderboard(data); });
   }, []);
 
   useEffect(() => {
     if (questions.length === 0) return;
-    confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 }, colors: ['#a855f7', '#22d3ee', '#fbbf24'] });
+    confetti({ particleCount: 120, spread: 90, origin: { y: 0.5 }, colors: ['#a855f7', '#22d3ee', '#fbbf24', '#22c55e'] });
   }, []);
 
   const handleShare = () => {
-    const text = `I scored ${totalScore} points (${correctCount}/${questions.length}) on ${topicInfo?.name || topic} in QuizWhiz! 🎯`;
+    const text = `I scored ${totalScore} pts (${correctCount}/${questions.length}) on ${topicInfo?.name || topic} in QuizWhiz! 🎯`;
     if (navigator.share) {
-      navigator.share({ title: 'QuizWhiz Result', text, url: window.location.origin });
+      navigator.share({ title: 'QuizWhiz', text, url: window.location.origin });
     } else {
       navigator.clipboard.writeText(text);
     }
   };
 
-  if (questions.length === 0) {
-    navigate('/solo');
-    return null;
-  }
+  if (questions.length === 0) { navigate('/solo'); return null; }
 
   return (
-    <div className="min-h-screen bg-background bg-particles flex flex-col items-center px-4 py-8">
-      <div className="absolute top-4 right-4 z-20">
-        <ThemeToggle />
-      </div>
+    <div className="min-h-screen bg-gradient-mesh relative overflow-hidden flex flex-col items-center px-4 py-8">
+      <FloatingParticles />
+      <div className="absolute top-4 right-6 z-20"><ThemeToggle /></div>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-lg"
+        className="w-full max-w-lg relative z-10"
       >
         {/* Header */}
         <div className="text-center mb-6">
           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300 }}>
-            <Trophy className="w-12 h-12 text-primary mx-auto mb-3" />
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-4 shadow-premium">
+              <Trophy className="w-10 h-10 text-primary-foreground" />
+            </div>
           </motion.div>
           <h1 className="font-display text-4xl font-bold mb-1">
             <span className="text-gradient">Quiz Complete!</span>
           </h1>
-          <p className="text-muted-foreground">{topicInfo?.icon} {topicInfo?.name}</p>
+          <p className="text-muted-foreground flex items-center justify-center gap-2">
+            <span className="text-lg">{topicInfo?.icon}</span> {topicInfo?.name}
+          </p>
         </div>
 
         {/* Score card */}
@@ -109,36 +104,40 @@ const SoloResults = () => {
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.2, type: 'spring' }}
-          className="glass-strong border-2 border-primary/40 rounded-2xl p-8 text-center mb-6 glow-primary relative overflow-hidden"
+          className="glass-premium rounded-3xl p-8 text-center mb-6 shadow-premium relative overflow-hidden"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/10 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5 pointer-events-none" />
           <div className="relative z-10">
             <motion.p
               initial={{ scale: 0.5 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.4, type: 'spring' }}
-              className="font-mono text-5xl font-bold text-primary mb-2"
+              className="font-mono text-6xl font-bold text-gradient mb-1"
             >
               {totalScore}
             </motion.p>
-            <p className="text-sm text-muted-foreground">points</p>
+            <p className="text-sm text-muted-foreground font-medium">points earned</p>
 
-            <div className="grid grid-cols-3 gap-4 mt-6">
-              <div className="text-center">
-                <Target className="w-5 h-5 text-accent mx-auto mb-1" />
-                <p className="font-bold text-foreground">{correctCount}/{questions.length}</p>
-                <p className="text-xs text-muted-foreground">Correct</p>
-              </div>
-              <div className="text-center">
-                <Medal className="w-5 h-5 text-quiz-yellow mx-auto mb-1" />
-                <p className="font-bold text-foreground">{percentage}%</p>
-                <p className="text-xs text-muted-foreground">Accuracy</p>
-              </div>
-              <div className="text-center">
-                <Clock className="w-5 h-5 text-neon-cyan mx-auto mb-1" />
-                <p className="font-bold text-foreground">{Math.round(answers.reduce((s, a) => s + a.timeMs, 0) / 1000)}s</p>
-                <p className="text-xs text-muted-foreground">Total Time</p>
-              </div>
+            <div className="grid grid-cols-3 gap-4 mt-8">
+              {[
+                { icon: Target, value: `${correctCount}/${questions.length}`, label: 'Correct', color: 'text-accent' },
+                { icon: Medal, value: `${percentage}%`, label: 'Accuracy', color: 'text-quiz-yellow' },
+                { icon: Clock, value: `${Math.round(answers.reduce((s, a) => s + a.timeMs, 0) / 1000)}s`, label: 'Time', color: 'text-neon-cyan' },
+              ].map((stat, i) => (
+                <motion.div
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 + i * 0.1 }}
+                  className="text-center"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center mx-auto mb-2">
+                    <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                  </div>
+                  <p className="font-bold text-foreground text-lg">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                </motion.div>
+              ))}
             </div>
           </div>
         </motion.div>
@@ -148,10 +147,12 @@ const SoloResults = () => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="glass rounded-xl p-4 mb-6 flex items-center justify-between"
+          className="glass-premium rounded-2xl p-4 mb-5 flex items-center justify-between"
         >
           <div className="flex items-center gap-3">
-            <Star className="w-6 h-6 text-quiz-yellow" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-quiz-yellow/20 to-quiz-yellow/5 flex items-center justify-center">
+              <Star className="w-5 h-5 text-quiz-yellow" />
+            </div>
             <div>
               <p className="font-display font-semibold text-foreground">Level {level}</p>
               <p className="text-xs text-muted-foreground">{xp} total XP</p>
@@ -161,7 +162,7 @@ const SoloResults = () => {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={handleShare}
-            className="px-3 py-2 rounded-lg glass text-sm text-foreground flex items-center gap-2 hover:bg-secondary/80 transition-colors"
+            className="px-4 py-2 rounded-xl glass-premium text-sm text-foreground flex items-center gap-2 hover:border-primary/30 transition-colors"
           >
             <Share2 className="w-4 h-4" /> Share
           </motion.button>
@@ -172,21 +173,23 @@ const SoloResults = () => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="glass rounded-xl p-4 mb-6"
+          className="glass-premium rounded-2xl p-5 mb-5"
         >
           <h3 className="font-display font-semibold text-foreground mb-3 text-sm">Answer Review</h3>
-          <div className="space-y-2 max-h-48 overflow-y-auto">
+          <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
             {questions.map((q, i) => {
               const answer = answers[i];
               const isCorrect = answer?.correct;
               return (
-                <div key={q.id} className="flex items-center gap-2 text-sm">
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                    isCorrect ? 'bg-accent/20 text-accent' : answer ? 'bg-destructive/20 text-destructive' : 'bg-muted text-muted-foreground'
+                <div key={q.id} className="flex items-center gap-3 py-1.5">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                    isCorrect ? 'bg-accent/20' : answer ? 'bg-destructive/20' : 'bg-muted'
                   }`}>
-                    {isCorrect ? '✓' : answer ? '✗' : '—'}
-                  </span>
-                  <span className="text-foreground truncate flex-1">{q.text}</span>
+                    {isCorrect ? <CheckCircle2 className="w-3.5 h-3.5 text-accent" /> :
+                     answer ? <XCircle className="w-3.5 h-3.5 text-destructive" /> :
+                     <span className="text-xs text-muted-foreground">—</span>}
+                  </div>
+                  <span className="text-sm text-foreground truncate flex-1">{q.text}</span>
                 </div>
               );
             })}
@@ -199,26 +202,33 @@ const SoloResults = () => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6 }}
-            className="glass rounded-xl p-4 mb-6"
+            className="glass-premium rounded-2xl p-5 mb-6"
           >
-            <h3 className="font-display font-semibold text-foreground mb-3 text-sm flex items-center gap-2">
+            <h3 className="font-display font-semibold text-foreground mb-4 text-sm flex items-center gap-2">
               <Trophy className="w-4 h-4 text-primary" /> Global Top 10 — {topicInfo?.name}
             </h3>
             <div className="space-y-1.5">
               {leaderboard.map((entry, i) => (
-                <div
+                <motion.div
                   key={i}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${
-                    entry.player_name === playerName && entry.score === totalScore ? 'glass border border-primary/40' : ''
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.7 + i * 0.04 }}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
+                    entry.player_name === playerName && entry.score === totalScore
+                      ? 'glass border border-primary/30'
+                      : 'hover:bg-secondary/30'
                   }`}
                 >
-                  <span className={`w-6 text-center font-bold ${i < 3 ? 'text-quiz-yellow' : 'text-muted-foreground'}`}>
+                  <span className={`w-7 text-center font-bold text-sm ${
+                    i === 0 ? 'text-gold' : i === 1 ? 'text-silver' : i === 2 ? 'text-bronze' : 'text-muted-foreground'
+                  }`}>
                     {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
                   </span>
-                  <span className="text-foreground flex-1 truncate">{entry.player_name}</span>
+                  <span className="text-foreground flex-1 truncate font-medium">{entry.player_name}</span>
                   <span className="font-mono font-bold text-primary">{entry.score}</span>
                   <span className="text-xs text-muted-foreground">{entry.correct_answers}/{entry.total_questions}</span>
-                </div>
+                </motion.div>
               ))}
             </div>
           </motion.div>
@@ -235,7 +245,7 @@ const SoloResults = () => {
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => { reset(); navigate('/'); }}
-            className="px-6 py-3 rounded-xl glass text-foreground font-display font-semibold flex items-center gap-2 hover:bg-secondary/80 transition-colors"
+            className="px-6 py-3.5 rounded-2xl glass-premium text-foreground font-display font-semibold flex items-center gap-2"
           >
             <Home className="w-4 h-4" /> Home
           </motion.button>
@@ -243,7 +253,7 @@ const SoloResults = () => {
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => { reset(); navigate('/solo'); }}
-            className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-display font-semibold flex items-center gap-2 glow-primary"
+            className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-display font-semibold flex items-center gap-2 shadow-premium"
           >
             <RotateCcw className="w-4 h-4" /> Play Again
           </motion.button>
