@@ -56,8 +56,7 @@ const CounterStat = ({ value, label, icon: Icon, suffix = '' }: { value: number;
         <Icon className="w-5 h-5 text-primary" />
       </div>
       <p className="font-display text-3xl sm:text-4xl font-bold text-foreground">
-        <span ref={ref}>
-        {count.toLocaleString()}{suffix}
+        <span ref={ref}>{count.toLocaleString()}{suffix}</span>
       </p>
       <p className="text-xs text-muted-foreground mt-1.5 font-medium">{label}</p>
     </div>
