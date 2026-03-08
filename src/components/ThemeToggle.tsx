@@ -1,13 +1,15 @@
+import { forwardRef } from 'react';
 import { useTheme } from 'next-themes';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sun, Moon } from 'lucide-react';
 
-const ThemeToggle = () => {
+const ThemeToggle = forwardRef<HTMLButtonElement>((_, ref) => {
   const { theme, setTheme } = useTheme();
   const isDark = theme === 'dark';
 
   return (
     <motion.button
+      ref={ref}
       whileHover={{ scale: 1.08 }}
       whileTap={{ scale: 0.9 }}
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
@@ -27,6 +29,8 @@ const ThemeToggle = () => {
       </AnimatePresence>
     </motion.button>
   );
-};
+});
+
+ThemeToggle.displayName = 'ThemeToggle';
 
 export default ThemeToggle;

@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { motion } from 'framer-motion';
 
 interface LogoProps {
@@ -11,11 +12,11 @@ const sizes = {
   xl: { text: 'text-6xl sm:text-7xl md:text-8xl', icon: 'w-16 h-16', gap: 'gap-3' },
 };
 
-const Logo = ({ size = 'lg' }: LogoProps) => {
+const Logo = forwardRef<HTMLDivElement, LogoProps>(({ size = 'lg' }, ref) => {
   const s = sizes[size];
 
   return (
-    <div className={`inline-flex items-center ${s.gap}`}>
+    <div ref={ref} className={`inline-flex items-center ${s.gap}`}>
       <motion.div
         className={`${s.icon} relative`}
         animate={{ rotate: [0, 3, -3, 0] }}
@@ -35,6 +36,8 @@ const Logo = ({ size = 'lg' }: LogoProps) => {
       </h1>
     </div>
   );
-};
+});
+
+Logo.displayName = 'Logo';
 
 export default Logo;
