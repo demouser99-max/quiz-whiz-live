@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Gamepad2, Shield, Trophy, BarChart3, Zap, ArrowRight, Sparkles } from 'lucide-react';
+import { Gamepad2, Trophy, BarChart3, Zap, ArrowRight, Sparkles } from 'lucide-react';
 import FloatingParticles from '@/components/FloatingParticles';
 import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
