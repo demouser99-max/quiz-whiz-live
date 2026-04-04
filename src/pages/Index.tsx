@@ -88,7 +88,7 @@ const Index = () => {
             >
               <Play className="w-3.5 h-3.5" /> Start Quiz
             </motion.button>
-            {user ? (
+            {user && (
               <motion.button
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
@@ -97,15 +97,6 @@ const Index = () => {
               >
                 <User className="w-4 h-4 text-primary" />
                 <span className="hidden sm:inline">{profile?.display_name || 'Dashboard'}</span>
-              </motion.button>
-            ) : (
-              <motion.button
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
-                onClick={() => navigate('/auth')}
-                className="px-3.5 py-2 rounded-xl glass-card text-sm font-medium text-foreground"
-              >
-                Sign In
               </motion.button>
             )}
             <ThemeToggle />
