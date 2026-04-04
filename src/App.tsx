@@ -20,6 +20,7 @@ import SoloPlay from "./pages/SoloPlay";
 import SoloResults from "./pages/SoloResults";
 import NotFound from "./pages/NotFound";
 import { BuiltByButton } from "./components/BuiltByButton";
+import AuthCallback from "./pages/AuthCallback";
 
 const queryClient = new QueryClient();
 
