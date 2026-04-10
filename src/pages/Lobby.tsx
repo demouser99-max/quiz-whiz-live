@@ -39,11 +39,21 @@ const Lobby = () => {
     }
   }, [quiz?.players.length]);
 
+  // Navigate when quiz starts (realtime or polling)
   useEffect(() => {
     if (quiz?.status === 'playing') {
       navigate(`/play/${quiz.code}`);
     }
   }, [quiz?.status]);
+
+  // Polling fallback: check quiz status every 3s in case realtime misses an event
+  useEffect(() => {
+    if (!code || !quiz || quiz.status !== 'lobby') return;
+    const interval = setInterval(() => {
+      fetchQuiz(code);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [code, quiz?.status]);
 
   if (loading || (!quiz && !loading)) {
     return (
