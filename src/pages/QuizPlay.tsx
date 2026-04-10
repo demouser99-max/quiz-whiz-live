@@ -4,9 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuizStore } from '@/lib/quiz-store';
 import { playCorrectSound, playWrongSound, playTickSound, playCountdownUrgent, playTransitionSound } from '@/lib/sounds';
 import CircularTimer from '@/components/CircularTimer';
-import AnimatedLeaderboard from '@/components/AnimatedLeaderboard';
 import confetti from 'canvas-confetti';
-import { Trophy, Square, ChevronRight, Sparkles, Lock, CheckCircle2 } from 'lucide-react';
+import { Square, Sparkles, CheckCircle2 } from 'lucide-react';
 
 const optionColors = [
   { bg: 'bg-quiz-red', hover: 'hover-quiz-red', glow: 'hsl(var(--quiz-red) / 0.4)' },
@@ -17,6 +16,8 @@ const optionColors = [
 
 const optionIcons = ['◆', '●', '▲', '★'];
 
+const FEEDBACK_DELAY_MS = 1200;
+
 const QuizPlay = () => {
   const navigate = useNavigate();
   const { code } = useParams();
@@ -25,30 +26,31 @@ const QuizPlay = () => {
   const sessionId = useQuizStore(s => s.sessionId);
   const fetchQuiz = useQuizStore(s => s.fetchQuiz);
   const submitAnswer = useQuizStore(s => s.submitAnswer);
-  const nextQuestion = useQuizStore(s => s.nextQuestion);
   const endQuiz = useQuizStore(s => s.endQuiz);
-  const getCurrentQuestion = useQuizStore(s => s.getCurrentQuestion);
   const subscribeToQuiz = useQuizStore(s => s.subscribeToQuiz);
 
+  // Independent local question index per player
+  const [localIndex, setLocalIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [answerStartTime, setAnswerStartTime] = useState(0);
-  const [lockedIn, setLockedIn] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [answerResult, setAnswerResult] = useState<'correct' | 'wrong' | 'timeout' | null>(null);
-  const prevQuestionIndexRef = useRef<number>(-999);
+  const [finished, setFinished] = useState(false);
   const hasSubmittedRef = useRef(false);
+  const prevIndexRef = useRef(-1);
 
-  const question = getCurrentQuestion();
   const myPlayer = quiz?.players.find(p => p.sessionId === sessionId);
   const isHost = myPlayer?.isHost;
-  const currentQuestionIndex = quiz?.currentQuestionIndex ?? -1;
+  const question = quiz?.questions[localIndex] ?? null;
+  const totalQuestions = quiz?.questions.length ?? 0;
 
+  // Fetch quiz data on mount
   useEffect(() => {
     if (code) fetchQuiz(code);
   }, [code]);
 
+  // Subscribe to realtime (for status changes like host ending quiz)
   useEffect(() => {
     if (quiz?.id) {
       const unsubscribe = subscribeToQuiz(quiz.id);
@@ -56,32 +58,50 @@ const QuizPlay = () => {
     }
   }, [quiz?.id]);
 
+  // If host ends quiz or status becomes results, navigate
   useEffect(() => {
     if (quiz?.status === 'results') {
-      confetti({ particleCount: 200, spread: 100, origin: { y: 0.5 } });
       navigate(`/results/${code}`);
     }
   }, [quiz?.status, navigate, code]);
 
-  // Reset on question change
+  // Reset state when localIndex changes
   useEffect(() => {
-    if (currentQuestionIndex === prevQuestionIndexRef.current) return;
-    prevQuestionIndexRef.current = currentQuestionIndex;
+    if (localIndex === prevIndexRef.current) return;
+    prevIndexRef.current = localIndex;
 
-    if (currentQuestionIndex >= 0 && quiz) {
+    if (quiz && localIndex < totalQuestions) {
       setSelectedAnswer(null);
-      setLockedIn(false);
       setShowResult(false);
-      setShowLeaderboard(false);
       setAnswerResult(null);
       setTimeLeft(quiz.timePerQuestion);
       setAnswerStartTime(Date.now());
       hasSubmittedRef.current = false;
       playTransitionSound();
     }
-  }, [currentQuestionIndex, quiz?.timePerQuestion]);
+  }, [localIndex, quiz?.timePerQuestion, totalQuestions]);
 
-  // Submit answer helper (called on lock-in or timeout)
+  // Auto-advance after showing feedback
+  const advanceToNext = useCallback(() => {
+    const nextIdx = localIndex + 1;
+    if (nextIdx >= totalQuestions) {
+      setFinished(true);
+      // If host, end the quiz for everyone
+      if (isHost) {
+        endQuiz();
+      } else {
+        // Non-host: navigate to results directly
+        if (code) {
+          // Refresh quiz data to get final scores, then navigate
+          fetchQuiz(code).then(() => navigate(`/results/${code}`));
+        }
+      }
+    } else {
+      setLocalIndex(nextIdx);
+    }
+  }, [localIndex, totalQuestions, isHost, endQuiz, code, fetchQuiz, navigate]);
+
+  // Finalize answer (on select or timeout)
   const finalizeAnswer = useCallback(async (selected: number | null) => {
     if (hasSubmittedRef.current || !question) return;
     hasSubmittedRef.current = true;
@@ -89,10 +109,10 @@ const QuizPlay = () => {
     const timeMs = Date.now() - answerStartTime;
 
     if (selected === null) {
-      // Timeout with no selection
       playWrongSound();
       setAnswerResult('timeout');
       setShowResult(true);
+      setTimeout(advanceToNext, FEEDBACK_DELAY_MS);
       return;
     }
 
@@ -107,22 +127,22 @@ const QuizPlay = () => {
     }
 
     await submitAnswer(question.id, selected, timeMs);
-    setTimeout(() => setShowResult(true), 600);
-  }, [question, answerStartTime, submitAnswer]);
+    setShowResult(true);
 
-  // Timer
+    // Auto-advance after brief feedback
+    setTimeout(advanceToNext, FEEDBACK_DELAY_MS);
+  }, [question, answerStartTime, submitAnswer, advanceToNext]);
+
+  // Timer countdown
   useEffect(() => {
-    if (!quiz || !question || showResult || showLeaderboard || currentQuestionIndex < 0) return;
+    if (!quiz || !question || showResult || finished || localIndex >= totalQuestions) return;
 
     const interval = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(interval);
-          // Time's up — finalize whatever is selected
-          const currentSelected = selectedAnswer;
           if (!hasSubmittedRef.current) {
-            // Use setTimeout to avoid state update during render
-            setTimeout(() => finalizeAnswer(currentSelected), 0);
+            setTimeout(() => finalizeAnswer(selectedAnswer), 0);
           }
           return 0;
         }
@@ -133,33 +153,16 @@ const QuizPlay = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [currentQuestionIndex, showResult, showLeaderboard, finalizeAnswer, selectedAnswer]);
+  }, [localIndex, showResult, finished, finalizeAnswer, selectedAnswer]);
 
-  // Select an answer (just highlight, no submission)
+  // Click an option = instant lock-in and submit
   const handleSelect = useCallback((index: number) => {
-    if (lockedIn || showResult) return;
-    setSelectedAnswer(prev => prev === index ? null : index); // Toggle selection
-  }, [lockedIn, showResult]);
+    if (showResult || hasSubmittedRef.current) return;
+    setSelectedAnswer(index);
+    finalizeAnswer(index);
+  }, [showResult, finalizeAnswer]);
 
-  // Lock in the selected answer
-  const handleLockIn = useCallback(async () => {
-    if (selectedAnswer === null || lockedIn || showResult) return;
-    setLockedIn(true);
-    await finalizeAnswer(selectedAnswer);
-  }, [selectedAnswer, lockedIn, showResult, finalizeAnswer]);
-
-  const handleNext = useCallback(async () => {
-    setShowResult(false);
-    setShowLeaderboard(false);
-    await nextQuestion();
-  }, [nextQuestion]);
-
-  const handleShowLeaderboard = useCallback(async () => {
-    if (code) await fetchQuiz(code);
-    setShowLeaderboard(true);
-  }, [code, fetchQuiz]);
-
-  // Loading skeleton
+  // Loading
   if (!quiz || !question) {
     return (
       <div className="min-h-screen bg-background bg-particles flex items-center justify-center">
@@ -172,44 +175,13 @@ const QuizPlay = () => {
     );
   }
 
-  // Leaderboard view
-  if (showLeaderboard) {
+  if (finished) {
     return (
-      <div className="min-h-screen bg-background bg-particles flex flex-col items-center justify-center px-4">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          className="w-full max-w-md"
-        >
-          <motion.h2
-            initial={{ y: -10 }}
-            animate={{ y: 0 }}
-            className="font-display text-2xl font-bold text-foreground text-center mb-6 flex items-center justify-center gap-2"
-          >
-            <Trophy className="w-6 h-6 text-primary" />
-            <span className="text-gradient">Leaderboard</span>
-          </motion.h2>
-
-          <AnimatedLeaderboard players={quiz.players} sessionId={sessionId} />
-
-          <div className="mt-8">
-            {isHost ? (
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={handleNext}
-                className="w-full px-6 py-4 rounded-xl bg-primary text-primary-foreground font-display font-semibold text-lg glow-primary flex items-center justify-center gap-2"
-              >
-                <ChevronRight className="w-5 h-5" />
-                Next Question
-              </motion.button>
-            ) : (
-              <p className="text-center text-muted-foreground animate-pulse-glow text-sm">
-                Waiting for host to continue...
-              </p>
-            )}
-          </div>
+      <div className="min-h-screen bg-background bg-particles flex items-center justify-center">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center">
+          <Sparkles className="w-10 h-10 text-primary mx-auto mb-4" />
+          <p className="font-display text-2xl font-bold text-foreground">Quiz Complete!</p>
+          <p className="text-muted-foreground mt-2">Loading results...</p>
         </motion.div>
       </div>
     );
@@ -220,12 +192,12 @@ const QuizPlay = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-2 max-w-2xl mx-auto w-full">
         <motion.span
-          key={currentQuestionIndex}
+          key={localIndex}
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           className="text-sm font-medium text-muted-foreground glass px-3 py-1 rounded-full"
         >
-          {quiz.currentQuestionIndex + 1} / {quiz.questions.length}
+          {localIndex + 1} / {totalQuestions}
         </motion.span>
         <span className="text-xs px-3 py-1 rounded-full glass text-neon-cyan font-medium">
           {question.category}
@@ -260,7 +232,7 @@ const QuizPlay = () => {
           </motion.div>
         </AnimatePresence>
 
-        {/* Options */}
+        {/* Options - click to instantly answer */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
           {question.options.map((option, i) => {
             const isCorrect = i === question.correctIndex;
@@ -276,42 +248,27 @@ const QuizPlay = () => {
               } else {
                 stateClass = 'opacity-30 scale-[0.97]';
               }
-            } else if (isSelected && lockedIn) {
+            } else if (isSelected) {
               stateClass = 'ring-2 ring-primary scale-[1.02]';
               glowStyle = { boxShadow: `0 0 25px ${optionColors[i].glow}, 0 0 10px hsl(var(--primary) / 0.3)` };
-            } else if (isSelected) {
-              stateClass = 'ring-2 ring-foreground/50 scale-[1.02]';
-              glowStyle = { boxShadow: `0 0 20px ${optionColors[i].glow}` };
             }
 
             return (
               <motion.button
-                key={`${currentQuestionIndex}-${i}`}
+                key={`${localIndex}-${i}`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.06, duration: 0.2 }}
-                whileHover={!showResult && !lockedIn ? {
+                whileHover={!showResult && !hasSubmittedRef.current ? {
                   scale: 1.03,
                   boxShadow: `0 0 25px ${optionColors[i].glow}`,
                 } : {}}
-                whileTap={!showResult && !lockedIn ? { scale: 0.96 } : {}}
+                whileTap={!showResult && !hasSubmittedRef.current ? { scale: 0.96 } : {}}
                 onClick={() => handleSelect(i)}
-                disabled={showResult || lockedIn}
+                disabled={showResult || hasSubmittedRef.current}
                 style={glowStyle}
                 className={`${optionColors[i].bg} ${optionColors[i].hover} ${stateClass} p-4 sm:p-5 rounded-xl text-left transition-all duration-200 flex items-start gap-3 relative overflow-hidden`}
               >
-                {/* Ripple on select */}
-                {isSelected && !showResult && !lockedIn && (
-                  <motion.div
-                    key={`ripple-${selectedAnswer}-${i}`}
-                    initial={{ scale: 0, opacity: 0.5 }}
-                    animate={{ scale: 4, opacity: 0 }}
-                    transition={{ duration: 0.5 }}
-                    className="absolute inset-0 bg-foreground/20 rounded-full"
-                    style={{ transformOrigin: 'center' }}
-                  />
-                )}
-
                 <span className="w-8 h-8 rounded-lg bg-background/20 flex items-center justify-center font-bold text-sm shrink-0 backdrop-blur-sm">
                   {optionIcons[i]}
                 </span>
@@ -319,29 +276,12 @@ const QuizPlay = () => {
                   {option}
                 </span>
 
-                {/* Selected indicator (before lock-in) */}
-                {isSelected && !showResult && !lockedIn && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="ml-auto flex items-center"
-                  >
+                {isSelected && !showResult && (
+                  <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="ml-auto flex items-center">
                     <CheckCircle2 className="w-6 h-6 text-primary-foreground" />
                   </motion.span>
                 )}
 
-                {/* Locked indicator */}
-                {isSelected && lockedIn && !showResult && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="ml-auto flex items-center"
-                  >
-                    <Lock className="w-5 h-5 text-primary-foreground" />
-                  </motion.span>
-                )}
-
-                {/* Checkmark for correct */}
                 {showResult && isCorrect && (
                   <motion.span
                     initial={{ scale: 0, rotate: -45 }}
@@ -353,13 +293,8 @@ const QuizPlay = () => {
                   </motion.span>
                 )}
 
-                {/* X for wrong selected */}
                 {showResult && isSelected && !isCorrect && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="ml-auto text-2xl"
-                  >
+                  <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="ml-auto text-2xl">
                     ✗
                   </motion.span>
                 )}
@@ -367,40 +302,6 @@ const QuizPlay = () => {
             );
           })}
         </div>
-
-        {/* Lock In Button */}
-        <AnimatePresence>
-          {selectedAnswer !== null && !lockedIn && !showResult && (
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.9 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-              className="mt-6"
-            >
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleLockIn}
-                className="px-8 py-4 rounded-xl bg-primary text-primary-foreground font-display font-bold text-lg glow-primary flex items-center gap-3 mx-auto"
-              >
-                <Lock className="w-5 h-5" />
-                Lock In Answer
-              </motion.button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Locked-in waiting state */}
-        {lockedIn && !showResult && (
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="mt-6 text-muted-foreground animate-pulse-glow text-sm text-center"
-          >
-            Answer locked in! Waiting for result...
-          </motion.p>
-        )}
 
         {/* Result feedback */}
         <AnimatePresence mode="wait">
@@ -411,14 +312,10 @@ const QuizPlay = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-              className="mt-8 text-center"
+              className="mt-6 text-center"
             >
               {answerResult === 'correct' && (
-                <motion.p
-                  initial={{ scale: 0.8 }}
-                  animate={{ scale: [0.8, 1.1, 1] }}
-                  className="text-accent font-display text-2xl font-bold glow-accent inline-block px-6 py-2 rounded-xl"
-                >
+                <motion.p initial={{ scale: 0.8 }} animate={{ scale: [0.8, 1.1, 1] }} className="text-accent font-display text-2xl font-bold glow-accent inline-block px-6 py-2 rounded-xl">
                   🎉 Correct!
                 </motion.p>
               )}
@@ -428,31 +325,14 @@ const QuizPlay = () => {
               {answerResult === 'timeout' && (
                 <p className="text-muted-foreground font-display text-2xl">⏱ Time's up!</p>
               )}
-
-              <div className="mt-4">
-                {isHost ? (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={handleShowLeaderboard}
-                    className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-display font-semibold flex items-center gap-2 mx-auto glow-primary"
-                  >
-                    <Trophy className="w-4 h-4" /> Leaderboard
-                  </motion.button>
-                ) : (
-                  <p className="text-muted-foreground animate-pulse-glow text-sm">Waiting for host...</p>
-                )}
-              </div>
+              <p className="text-xs text-muted-foreground mt-2 animate-pulse">Next question loading...</p>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
       {/* Score footer */}
-      <motion.div
-        className="text-center mt-4 glass rounded-full px-6 py-2 mx-auto"
-        layout
-      >
+      <motion.div className="text-center mt-4 glass rounded-full px-6 py-2 mx-auto" layout>
         <span className="text-sm text-muted-foreground">Score: </span>
         <motion.span
           key={myPlayer?.score}
