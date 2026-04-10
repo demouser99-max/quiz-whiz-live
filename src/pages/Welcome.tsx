@@ -4,8 +4,6 @@ import { Gamepad2, Trophy, BarChart3, Zap, ArrowRight, Sparkles } from 'lucide-r
 import FloatingParticles from '@/components/FloatingParticles';
 import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
-import { useAuth } from '@/hooks/useAuth';
-import { useEffect } from 'react';
 
 const Welcome = () => {
   const navigate = useNavigate();
