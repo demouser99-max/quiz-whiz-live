@@ -9,23 +9,7 @@ import { useEffect } from 'react';
 
 const Welcome = () => {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
-
-  useEffect(() => {
-    if (!loading && user) navigate('/home');
-  }, [user, loading]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-mesh flex items-center justify-center">
-        <motion.div
-          animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
-          className="w-14 h-14 rounded-2xl bg-primary/20"
-        />
-      </div>
-    );
-  }
+  // No redirect - always show home page first
 
   return (
     <div className="min-h-screen bg-gradient-mesh relative overflow-hidden flex flex-col">
