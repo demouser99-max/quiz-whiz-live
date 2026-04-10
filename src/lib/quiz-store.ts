@@ -135,8 +135,8 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
       return { success: false, error: 'Quiz not found. Check the code and try again.' };
     }
 
-    if (quizData.status !== 'lobby') {
-      return { success: false, error: 'Quiz has already started.' };
+    if (quizData.status === 'results') {
+      return { success: false, error: 'Quiz has already ended.' };
     }
 
     const { data: existingPlayers } = await supabase

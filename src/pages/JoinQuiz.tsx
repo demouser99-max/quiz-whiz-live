@@ -18,8 +18,15 @@ const JoinQuiz = () => {
     setJoining(true);
     setError('');
     const result = await joinQuiz(code.trim().toUpperCase(), name.trim());
+    const upperCode = code.trim().toUpperCase();
     if (result.success) {
-      navigate(`/lobby/${code.trim().toUpperCase()}`);
+      // Check if quiz is already playing - go straight to play
+      const quiz = useQuizStore.getState().quiz;
+      if (quiz?.status === 'playing') {
+        navigate(`/play/${upperCode}`);
+      } else {
+        navigate(`/lobby/${upperCode}`);
+      }
     } else {
       setError(result.error || 'Failed to join');
     }
