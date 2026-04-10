@@ -364,10 +364,16 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
   endQuiz: async () => {
     const { quiz } = get();
     if (!quiz) return;
-    await supabase
+    const { error } = await supabase
       .from('quizzes')
       .update({ status: 'results' })
       .eq('id', quiz.id);
+    if (!error) {
+      set(state => {
+        if (!state.quiz) return state;
+        return { quiz: { ...state.quiz, status: 'results' as const } };
+      });
+    }
   },
 
   getLeaderboard: () => {
