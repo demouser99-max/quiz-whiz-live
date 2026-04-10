@@ -239,14 +239,33 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
     const { quiz } = get();
     if (!quiz) return;
 
-    await supabase
+    const now = new Date().toISOString();
+    const { error } = await supabase
       .from('quizzes')
       .update({
         status: 'playing',
         current_question_index: 0,
-        started_at: new Date().toISOString(),
+        started_at: now,
       })
       .eq('id', quiz.id);
+
+    if (error) {
+      console.error('Failed to start quiz:', error);
+      return;
+    }
+
+    // Optimistic local update so host navigates immediately
+    set(state => {
+      if (!state.quiz) return state;
+      return {
+        quiz: {
+          ...state.quiz,
+          status: 'playing' as const,
+          currentQuestionIndex: 0,
+          startedAt: new Date(now).getTime(),
+        },
+      };
+    });
   },
 
   nextQuestion: async () => {
@@ -255,18 +274,37 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
     const nextIndex = quiz.currentQuestionIndex + 1;
 
     if (nextIndex >= quiz.questions.length) {
-      await supabase
+      const { error } = await supabase
         .from('quizzes')
         .update({ status: 'results' })
         .eq('id', quiz.id);
+      if (!error) {
+        set(state => {
+          if (!state.quiz) return state;
+          return { quiz: { ...state.quiz, status: 'results' as const } };
+        });
+      }
     } else {
-      await supabase
+      const now = new Date().toISOString();
+      const { error } = await supabase
         .from('quizzes')
         .update({
           current_question_index: nextIndex,
-          started_at: new Date().toISOString(),
+          started_at: now,
         })
         .eq('id', quiz.id);
+      if (!error) {
+        set(state => {
+          if (!state.quiz) return state;
+          return {
+            quiz: {
+              ...state.quiz,
+              currentQuestionIndex: nextIndex,
+              startedAt: new Date(now).getTime(),
+            },
+          };
+        });
+      }
     }
   },
 
@@ -326,10 +364,16 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
   endQuiz: async () => {
     const { quiz } = get();
     if (!quiz) return;
-    await supabase
+    const { error } = await supabase
       .from('quizzes')
       .update({ status: 'results' })
       .eq('id', quiz.id);
+    if (!error) {
+      set(state => {
+        if (!state.quiz) return state;
+        return { quiz: { ...state.quiz, status: 'results' as const } };
+      });
+    }
   },
 
   getLeaderboard: () => {
