@@ -9,7 +9,7 @@ import NewBadgeToast from '@/components/NewBadgeToast';
 import ThemeToggle from '@/components/ThemeToggle';
 import FloatingParticles from '@/components/FloatingParticles';
 import confetti from 'canvas-confetti';
-import { Trophy, Home, RotateCcw, Star, Share2, Medal, Clock, Target, CheckCircle2, XCircle, UserPlus } from 'lucide-react';
+import { Trophy, Home, RotateCcw, Star, Share2, Medal, Clock, Target, CheckCircle2, XCircle } from 'lucide-react';
 import { TOPICS } from '@/data/questions';
 import type { Badge } from '@/lib/gamification';
 
@@ -144,33 +144,7 @@ const SoloResults = () => {
           </div>
         </motion.div>
 
-        {/* Guest CTA */}
-        {!user && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="glass-card rounded-xl p-4 mb-4 gradient-border"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <UserPlus className="w-4 h-4 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground">Save your progress!</p>
-                <p className="text-[11px] text-muted-foreground">Create an account to track history & compete globally.</p>
-              </div>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/auth')}
-                className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold shrink-0"
-              >
-                Sign Up
-              </motion.button>
-            </div>
-          </motion.div>
-        )}
+        {/* Guest info */}
 
         {/* XP + Level */}
         <motion.div

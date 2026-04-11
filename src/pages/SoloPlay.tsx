@@ -5,10 +5,11 @@ import { useSoloStore } from '@/lib/solo-store';
 import { playCorrectSound, playWrongSound, playTickSound, playCountdownUrgent, playTransitionSound } from '@/lib/sounds';
 import CircularTimer from '@/components/CircularTimer';
 import confetti from 'canvas-confetti';
-import { Lock, CheckCircle2, ChevronRight, Lightbulb, Zap } from 'lucide-react';
+import { CheckCircle2, Lightbulb, Zap, Sparkles } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 
 const TIME_PER_QUESTION = 20;
+const FEEDBACK_DELAY_MS = 1500;
 
 const optionColors = [
   { bg: 'bg-quiz-red', hover: 'hover-quiz-red', glow: 'hsl(var(--quiz-red) / 0.35)' },
@@ -31,7 +32,6 @@ const SoloPlay = () => {
 
   const [timeLeft, setTimeLeft] = useState(TIME_PER_QUESTION);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [lockedIn, setLockedIn] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [answerResult, setAnswerResult] = useState<'correct' | 'wrong' | 'timeout' | null>(null);
   const [answerStartTime, setAnswerStartTime] = useState(Date.now());
@@ -43,11 +43,11 @@ const SoloPlay = () => {
   useEffect(() => { if (questions.length === 0) navigate('/solo'); }, [questions.length]);
   useEffect(() => { if (status === 'finished') navigate('/solo/results'); }, [status]);
 
+  // Reset state on question change
   useEffect(() => {
     if (currentIndex === prevIndexRef.current) return;
     prevIndexRef.current = currentIndex;
     setSelectedAnswer(null);
-    setLockedIn(false);
     setShowResult(false);
     setAnswerResult(null);
     setTimeLeft(TIME_PER_QUESTION);
@@ -56,6 +56,12 @@ const SoloPlay = () => {
     playTransitionSound();
   }, [currentIndex]);
 
+  // Auto-advance after feedback
+  const advanceToNext = useCallback(() => {
+    nextQuestion();
+  }, [nextQuestion]);
+
+  // Finalize answer (instant on click or on timeout)
   const finalizeAnswer = useCallback((selected: number | null) => {
     if (hasSubmittedRef.current || !question) return;
     hasSubmittedRef.current = true;
@@ -66,6 +72,7 @@ const SoloPlay = () => {
       playWrongSound();
       setAnswerResult('timeout');
       setShowResult(true);
+      setTimeout(advanceToNext, FEEDBACK_DELAY_MS);
       return;
     }
 
@@ -80,9 +87,13 @@ const SoloPlay = () => {
     }
 
     submitAnswer(selected, timeMs);
-    setTimeout(() => setShowResult(true), 400);
-  }, [question, answerStartTime, submitAnswer]);
+    setShowResult(true);
 
+    // Auto-advance after brief feedback with explanation
+    setTimeout(advanceToNext, FEEDBACK_DELAY_MS + 800);
+  }, [question, answerStartTime, submitAnswer, advanceToNext]);
+
+  // Timer countdown
   useEffect(() => {
     if (!question || showResult) return;
     const interval = setInterval(() => {
@@ -100,18 +111,12 @@ const SoloPlay = () => {
     return () => clearInterval(interval);
   }, [currentIndex, showResult, finalizeAnswer, selectedAnswer]);
 
+  // Single-click instant submit
   const handleSelect = useCallback((index: number) => {
-    if (lockedIn || showResult) return;
-    setSelectedAnswer(prev => prev === index ? null : index);
-  }, [lockedIn, showResult]);
-
-  const handleLockIn = useCallback(() => {
-    if (selectedAnswer === null || lockedIn || showResult) return;
-    setLockedIn(true);
-    finalizeAnswer(selectedAnswer);
-  }, [selectedAnswer, lockedIn, showResult, finalizeAnswer]);
-
-  const handleNext = useCallback(() => { nextQuestion(); }, [nextQuestion]);
+    if (showResult || hasSubmittedRef.current) return;
+    setSelectedAnswer(index);
+    finalizeAnswer(index);
+  }, [showResult, finalizeAnswer]);
 
   if (!question) {
     return (
@@ -184,7 +189,7 @@ const SoloPlay = () => {
           </motion.div>
         </AnimatePresence>
 
-        {/* Options */}
+        {/* Options — single click to answer */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full">
           {question.options.map((option, i) => {
             const isCorrect = i === question.correctIndex;
@@ -196,12 +201,9 @@ const SoloPlay = () => {
               if (isCorrect) stateClass = 'ring-2 ring-accent scale-[1.02] glow-correct';
               else if (isSelected && !isCorrect) stateClass = 'animate-shake glow-wrong opacity-75';
               else stateClass = 'opacity-20 scale-[0.97]';
-            } else if (isSelected && lockedIn) {
+            } else if (isSelected) {
               stateClass = 'ring-2 ring-primary scale-[1.02]';
               glowStyle = { boxShadow: `0 0 20px ${optionColors[i].glow}` };
-            } else if (isSelected) {
-              stateClass = 'ring-2 ring-foreground/30 scale-[1.02]';
-              glowStyle = { boxShadow: `0 0 16px ${optionColors[i].glow}` };
             }
 
             return (
@@ -210,10 +212,10 @@ const SoloPlay = () => {
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05, duration: 0.22 }}
-                whileHover={!showResult && !lockedIn ? { scale: 1.02, boxShadow: `0 0 24px ${optionColors[i].glow}` } : {}}
-                whileTap={!showResult && !lockedIn ? { scale: 0.97 } : {}}
+                whileHover={!showResult && !hasSubmittedRef.current ? { scale: 1.02, boxShadow: `0 0 24px ${optionColors[i].glow}` } : {}}
+                whileTap={!showResult && !hasSubmittedRef.current ? { scale: 0.97 } : {}}
                 onClick={() => handleSelect(i)}
-                disabled={showResult || lockedIn}
+                disabled={showResult || hasSubmittedRef.current}
                 style={glowStyle}
                 className={`${optionColors[i].bg} ${optionColors[i].hover} ${stateClass} p-4 rounded-xl text-left transition-all duration-200 flex items-start gap-3 relative overflow-hidden group`}
               >
@@ -223,14 +225,9 @@ const SoloPlay = () => {
                 <span className="font-medium text-primary-foreground text-sm sm:text-base relative z-10 pt-0.5 flex-1">
                   {option}
                 </span>
-                {isSelected && !showResult && !lockedIn && (
+                {isSelected && !showResult && (
                   <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="ml-auto flex items-center shrink-0">
                     <CheckCircle2 className="w-5 h-5 text-primary-foreground" />
-                  </motion.span>
-                )}
-                {isSelected && lockedIn && !showResult && (
-                  <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="ml-auto flex items-center shrink-0">
-                    <Lock className="w-4 h-4 text-primary-foreground" />
                   </motion.span>
                 )}
                 {showResult && isCorrect && (
@@ -244,30 +241,7 @@ const SoloPlay = () => {
           })}
         </div>
 
-        {/* Lock In */}
-        <AnimatePresence>
-          {selectedAnswer !== null && !lockedIn && !showResult && (
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="mt-5">
-              <motion.button
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
-                onClick={handleLockIn}
-                className="px-10 py-3.5 rounded-xl bg-gradient-to-r from-primary to-neon-purple text-primary-foreground font-display font-bold text-base shadow-glow-primary flex items-center gap-3 mx-auto btn-ripple"
-              >
-                <Lock className="w-4 h-4" />
-                Lock In Answer
-              </motion.button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {lockedIn && !showResult && (
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-5 text-muted-foreground text-sm text-center animate-pulse">
-            Answer locked in!
-          </motion.p>
-        )}
-
-        {/* Result + Explanation */}
+        {/* Result + Explanation — auto-advances */}
         <AnimatePresence mode="wait">
           {showResult && (
             <motion.div
@@ -293,7 +267,7 @@ const SoloPlay = () => {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 }}
-                className="glass-card rounded-xl p-4 mb-4 text-left"
+                className="glass-card rounded-xl p-4 mb-3 text-left"
               >
                 <div className="flex items-start gap-3">
                   <div className="w-7 h-7 rounded-lg bg-quiz-yellow/15 flex items-center justify-center shrink-0 mt-0.5">
@@ -303,15 +277,10 @@ const SoloPlay = () => {
                 </div>
               </motion.div>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={handleNext}
-                className="px-8 py-3 rounded-xl bg-gradient-to-r from-primary to-neon-purple text-primary-foreground font-display font-semibold text-sm flex items-center gap-2 mx-auto shadow-glow-primary btn-ripple"
-              >
-                <ChevronRight className="w-4 h-4" />
-                {currentIndex + 1 >= questions.length ? 'See Results' : 'Next Question'}
-              </motion.button>
+              <p className="text-xs text-muted-foreground animate-pulse flex items-center justify-center gap-1.5">
+                <Sparkles className="w-3 h-3" />
+                {currentIndex + 1 >= questions.length ? 'Loading results...' : 'Next question loading...'}
+              </p>
             </motion.div>
           )}
         </AnimatePresence>
