@@ -179,7 +179,7 @@ const Results = () => {
           <motion.button
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/home')}
             className="px-6 py-3 rounded-xl glass text-foreground font-display font-semibold flex items-center gap-2 hover:bg-secondary/80 transition-colors"
           >
             <Home className="w-4 h-4" /> Home

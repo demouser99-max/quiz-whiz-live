@@ -34,7 +34,7 @@ const CreateQuiz = () => {
         className="w-full max-w-md"
       >
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/home')}
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-8 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" /> Back

@@ -23,7 +23,7 @@ const SoloTopicSelect = () => {
 
       <nav className="relative z-20 flex items-center justify-between px-6 py-5 max-w-7xl mx-auto">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/home')}
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm"
         >
           <ArrowLeft className="w-4 h-4" /> Back

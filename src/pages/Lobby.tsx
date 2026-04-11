@@ -72,7 +72,7 @@ const Lobby = () => {
       <div className="min-h-screen bg-background bg-particles flex items-center justify-center">
         <div className="text-center glass-strong rounded-2xl p-8">
           <h2 className="font-display text-2xl font-bold text-foreground mb-4">Quiz not found</h2>
-          <button onClick={() => navigate('/')} className="text-primary underline">Go home</button>
+          <button onClick={() => navigate('/home')} className="text-primary underline">Go home</button>
         </div>
       </div>
     );
