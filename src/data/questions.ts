@@ -619,10 +619,28 @@ export function getQuestionsByTopic(topic: string): Question[] {
   return questionBank.filter(q => q.category === topic);
 }
 
+/**
+ * Shuffle answer options using Fisher-Yates so the correct answer
+ * isn't biased toward positions A/B in the original data.
+ */
+function shuffleOptions(question: Question): Question {
+  const correctAnswer = question.options[question.correctIndex];
+  const shuffled = [...question.options];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return {
+    ...question,
+    options: shuffled,
+    correctIndex: shuffled.indexOf(correctAnswer),
+  };
+}
+
 export function getRandomQuestions(count: number, topic?: string): Question[] {
   const pool = topic ? getQuestionsByTopic(topic) : questionBank;
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, Math.min(count, shuffled.length));
+  return shuffled.slice(0, Math.min(count, shuffled.length)).map(shuffleOptions);
 }
 
 export function generateQuizCode(): string {
