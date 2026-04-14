@@ -208,8 +208,8 @@ const Index = () => {
         >
           <CounterStat value={550} label="Questions" icon={Brain} suffix="+" />
           <CounterStat value={10} label="Topics" icon={BookOpen} />
-          <CounterStat value={1000} label="Quizzes Played" icon={Trophy} suffix="+" />
-          <CounterStat value={100} label="Active Players" icon={Users} suffix="+" />
+          <CounterStat value={100} label="Quizzes Played" icon={Trophy} suffix="+" />
+          <CounterStat value={50} label="Active Players" icon={Users} suffix="+" />
         </motion.div>
       </section>
 
