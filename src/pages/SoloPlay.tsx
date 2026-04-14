@@ -5,7 +5,7 @@ import { useSoloStore } from '@/lib/solo-store';
 import { playCorrectSound, playWrongSound, playTickSound, playCountdownUrgent, playTransitionSound } from '@/lib/sounds';
 import CircularTimer from '@/components/CircularTimer';
 import confetti from 'canvas-confetti';
-import { CheckCircle2, Lightbulb, Zap, Sparkles } from 'lucide-react';
+import { CheckCircle2, Lightbulb, Zap, Sparkles, Flame } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 
 const TIME_PER_QUESTION = 20;
@@ -35,6 +35,8 @@ const SoloPlay = () => {
   const [showResult, setShowResult] = useState(false);
   const [answerResult, setAnswerResult] = useState<'correct' | 'wrong' | 'timeout' | null>(null);
   const [answerStartTime, setAnswerStartTime] = useState(Date.now());
+  const [streak, setStreak] = useState(0);
+  const [pointsEarned, setPointsEarned] = useState(0);
   const hasSubmittedRef = useRef(false);
   const prevIndexRef = useRef(-1);
 
@@ -50,18 +52,17 @@ const SoloPlay = () => {
     setSelectedAnswer(null);
     setShowResult(false);
     setAnswerResult(null);
+    setPointsEarned(0);
     setTimeLeft(TIME_PER_QUESTION);
     setAnswerStartTime(Date.now());
     hasSubmittedRef.current = false;
     playTransitionSound();
   }, [currentIndex]);
 
-  // Auto-advance after feedback
   const advanceToNext = useCallback(() => {
     nextQuestion();
   }, [nextQuestion]);
 
-  // Finalize answer (instant on click or on timeout)
   const finalizeAnswer = useCallback((selected: number | null) => {
     if (hasSubmittedRef.current || !question) return;
     hasSubmittedRef.current = true;
@@ -71,6 +72,7 @@ const SoloPlay = () => {
     if (selected === null) {
       playWrongSound();
       setAnswerResult('timeout');
+      setStreak(0);
       setShowResult(true);
       setTimeout(advanceToNext, FEEDBACK_DELAY_MS);
       return;
@@ -80,18 +82,25 @@ const SoloPlay = () => {
     if (isCorrect) {
       playCorrectSound();
       setAnswerResult('correct');
-      confetti({ particleCount: 45, spread: 65, origin: { y: 0.7 }, colors: ['#a855f7', '#22d3ee', '#22c55e'] });
+      setStreak(prev => prev + 1);
+      const pts = Math.max(100, 1000 - Math.round(timeMs / 10));
+      setPointsEarned(pts);
+      confetti({
+        particleCount: 50 + streak * 10,
+        spread: 70,
+        origin: { y: 0.7 },
+        colors: ['#a855f7', '#22d3ee', '#22c55e', '#facc15'],
+      });
     } else {
       playWrongSound();
       setAnswerResult('wrong');
+      setStreak(0);
     }
 
     submitAnswer(selected, timeMs);
     setShowResult(true);
-
-    // Auto-advance after brief feedback with explanation
     setTimeout(advanceToNext, FEEDBACK_DELAY_MS + 800);
-  }, [question, answerStartTime, submitAnswer, advanceToNext]);
+  }, [question, answerStartTime, submitAnswer, advanceToNext, streak]);
 
   // Timer countdown
   useEffect(() => {
@@ -111,7 +120,6 @@ const SoloPlay = () => {
     return () => clearInterval(interval);
   }, [currentIndex, showResult, finalizeAnswer, selectedAnswer]);
 
-  // Single-click instant submit
   const handleSelect = useCallback((index: number) => {
     if (showResult || hasSubmittedRef.current) return;
     setSelectedAnswer(index);
@@ -142,13 +150,24 @@ const SoloPlay = () => {
             <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg glass-card ${difficultyColor} uppercase tracking-wide`}>
               {question.difficulty}
             </span>
+            {/* Streak indicator */}
+            {streak >= 2 && (
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg glass-card"
+              >
+                <Flame className="w-3.5 h-3.5 text-destructive" />
+                <span className="text-xs font-bold text-destructive">{streak}x</span>
+              </motion.div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-primary" />
             <motion.span
               key={totalScore}
               initial={{ scale: 1 }}
-              animate={{ scale: [1, 1.15, 1] }}
+              animate={{ scale: [1, 1.2, 1] }}
               className="font-mono font-bold text-primary text-lg"
             >
               {totalScore}
@@ -156,7 +175,7 @@ const SoloPlay = () => {
           </div>
         </div>
 
-        {/* Progress */}
+        {/* Progress bar */}
         <div className="relative h-1.5 rounded-full bg-secondary/40 overflow-hidden">
           <motion.div
             animate={{ width: `${getProgress()}%` }}
@@ -177,10 +196,10 @@ const SoloPlay = () => {
         <AnimatePresence mode="wait">
           <motion.div
             key={question.id}
-            initial={{ opacity: 0, y: 16, scale: 0.98 }}
+            initial={{ opacity: 0, y: 20, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -16, scale: 0.98 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, y: -20, scale: 0.97 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className="glass-premium rounded-2xl p-6 sm:p-8 mb-5 w-full text-center shadow-elevated"
           >
             <h2 className="font-display text-lg sm:text-xl md:text-2xl font-bold text-foreground leading-snug">
@@ -189,7 +208,7 @@ const SoloPlay = () => {
           </motion.div>
         </AnimatePresence>
 
-        {/* Options — single click to answer */}
+        {/* Options — staggered entrance */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full">
           {question.options.map((option, i) => {
             const isCorrect = i === question.correctIndex;
@@ -209,11 +228,11 @@ const SoloPlay = () => {
             return (
               <motion.button
                 key={`${currentIndex}-${i}`}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05, duration: 0.22 }}
-                whileHover={!showResult && !hasSubmittedRef.current ? { scale: 1.02, boxShadow: `0 0 24px ${optionColors[i].glow}` } : {}}
-                whileTap={!showResult && !hasSubmittedRef.current ? { scale: 0.97 } : {}}
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ delay: 0.1 + i * 0.06, duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                whileHover={!showResult && !hasSubmittedRef.current ? { scale: 1.03, boxShadow: `0 0 28px ${optionColors[i].glow}` } : {}}
+                whileTap={!showResult && !hasSubmittedRef.current ? { scale: 0.96 } : {}}
                 onClick={() => handleSelect(i)}
                 disabled={showResult || hasSubmittedRef.current}
                 style={glowStyle}
@@ -225,13 +244,8 @@ const SoloPlay = () => {
                 <span className="font-medium text-primary-foreground text-sm sm:text-base relative z-10 pt-0.5 flex-1">
                   {option}
                 </span>
-                {isSelected && !showResult && (
-                  <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="ml-auto flex items-center shrink-0">
-                    <CheckCircle2 className="w-5 h-5 text-primary-foreground" />
-                  </motion.span>
-                )}
                 {showResult && isCorrect && (
-                  <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400 }} className="ml-auto text-xl shrink-0">✓</motion.span>
+                  <motion.span initial={{ scale: 0, rotate: -20 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 400 }} className="ml-auto text-xl shrink-0">✓</motion.span>
                 )}
                 {showResult && isSelected && !isCorrect && (
                   <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="ml-auto text-xl shrink-0">✗</motion.span>
@@ -241,20 +255,34 @@ const SoloPlay = () => {
           })}
         </div>
 
-        {/* Result + Explanation — auto-advances */}
+        {/* Result + Explanation */}
         <AnimatePresence mode="wait">
           {showResult && (
             <motion.div
               key="result"
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
               className="mt-5 w-full max-w-lg mx-auto text-center"
             >
               {answerResult === 'correct' && (
-                <motion.p initial={{ scale: 0.8 }} animate={{ scale: [0.8, 1.08, 1] }} className="text-accent font-display text-xl font-bold mb-3">
-                  🎉 Correct!
-                </motion.p>
+                <div className="mb-3">
+                  <motion.p initial={{ scale: 0.8 }} animate={{ scale: [0.8, 1.1, 1] }} className="text-accent font-display text-xl font-bold">
+                    🎉 Correct!
+                  </motion.p>
+                  {pointsEarned > 0 && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.15 }}
+                      className="text-sm text-accent/80 font-semibold mt-1"
+                    >
+                      +{pointsEarned} pts
+                      {streak >= 2 && <span className="ml-2 text-destructive">🔥 {streak}x streak!</span>}
+                    </motion.p>
+                  )}
+                </div>
               )}
               {answerResult === 'wrong' && (
                 <p className="text-destructive font-display text-xl font-bold mb-3">✗ Wrong!</p>
