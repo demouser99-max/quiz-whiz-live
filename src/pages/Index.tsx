@@ -143,7 +143,7 @@ const Index = () => {
             550+ curated questions across 10 topics. Compete on the global leaderboard, earn XP & badges. Start playing — no signup needed.
           </motion.p>
 
-          {/* Primary CTA */}
+          {/* Primary CTAs — 3 options */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -154,12 +154,21 @@ const Index = () => {
               whileHover={{ scale: 1.04, boxShadow: '0 0 40px hsl(265 90% 60% / 0.35)' }}
               whileTap={{ scale: 0.97 }}
               onClick={() => navigate('/solo')}
-              className="group relative px-10 py-4.5 rounded-2xl bg-gradient-to-r from-primary via-neon-purple to-primary text-primary-foreground font-display font-bold text-lg shadow-glow-primary flex items-center justify-center gap-3 btn-ripple overflow-hidden"
+              className="group relative px-8 py-4 rounded-2xl bg-gradient-to-r from-primary via-neon-purple to-primary text-primary-foreground font-display font-bold text-lg shadow-glow-primary flex items-center justify-center gap-3 btn-ripple overflow-hidden"
               style={{ backgroundSize: '200% 100%', animation: 'gradient-shift 4s ease-in-out infinite' }}
             >
-              <Rocket className="w-5 h-5" />
-              Start Quiz Now
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform duration-200" />
+              <Play className="w-5 h-5" />
+              Play Solo
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => navigate('/create')}
+              className="px-8 py-4 rounded-2xl glass-premium text-foreground font-display font-semibold text-lg flex items-center justify-center gap-3 hover:border-primary/20 transition-all"
+            >
+              <Zap className="w-5 h-5 text-primary" />
+              Create Quiz
             </motion.button>
 
             <motion.button
@@ -169,7 +178,7 @@ const Index = () => {
               className="px-8 py-4 rounded-2xl glass-premium text-foreground font-display font-semibold text-lg flex items-center justify-center gap-3 hover:border-primary/20 transition-all"
             >
               <Users className="w-5 h-5 text-accent" />
-              Join a Game
+              Join Quiz
             </motion.button>
           </motion.div>
 
