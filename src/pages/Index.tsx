@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react';
-import { motion, useInView } from 'framer-motion';
+import { useEffect, useState, useRef } from 'react';
+import { motion, useInView, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { useRef } from 'react';
 import {
   Zap, Users, Trophy, Award, BookOpen, ArrowRight, Brain, Timer,
   BarChart3, User, Sparkles, Play, Target, Flame, Shield, Crown,
-  ChevronRight, Star, TrendingUp, Globe, Rocket
+  ChevronRight, Star, TrendingUp, Globe, Rocket, Gamepad2
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import PlayerStats from '@/components/PlayerStats';
@@ -25,7 +24,7 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const } },
 };
 
-/* Animated counter hook */
+/* Animated counter */
 const useCounter = (target: number, duration = 1800) => {
   const [count, setCount] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
@@ -33,11 +32,9 @@ const useCounter = (target: number, duration = 1800) => {
 
   useEffect(() => {
     if (!inView) return;
-    let start = 0;
     const startTime = performance.now();
     const tick = (now: number) => {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
+      const progress = Math.min((now - startTime) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       setCount(Math.round(eased * target));
       if (progress < 1) requestAnimationFrame(tick);
@@ -51,10 +48,13 @@ const useCounter = (target: number, duration = 1800) => {
 const CounterStat = ({ value, label, icon: Icon, suffix = '' }: { value: number; label: string; icon: React.ElementType; suffix?: string }) => {
   const { count, ref } = useCounter(value);
   return (
-    <div className="text-center">
-      <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+    <div className="text-center group">
+      <motion.div
+        whileHover={{ scale: 1.1, rotate: [0, -5, 5, 0] }}
+        className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3 transition-shadow group-hover:shadow-glow-primary"
+      >
         <Icon className="w-5 h-5 text-primary" />
-      </div>
+      </motion.div>
       <p className="font-display text-3xl sm:text-4xl font-bold text-foreground">
         <span ref={ref}>{count.toLocaleString()}{suffix}</span>
       </p>
@@ -62,6 +62,39 @@ const CounterStat = ({ value, label, icon: Icon, suffix = '' }: { value: number;
     </div>
   );
 };
+
+/* Action card for main CTAs */
+const ActionCard = ({ icon: Icon, title, description, gradient, glowClass, tags, ctaText, ctaColor, onClick }: {
+  icon: React.ElementType; title: string; description: string; gradient: string;
+  glowClass: string; tags: { icon: React.ElementType; label: string }[];
+  ctaText: string; ctaColor: string; onClick: () => void;
+}) => (
+  <motion.button
+    whileHover={{ scale: 1.02, y: -6 }}
+    whileTap={{ scale: 0.98 }}
+    onClick={onClick}
+    className="glass-premium rounded-2xl p-6 sm:p-7 text-left card-lift group relative overflow-hidden w-full"
+  >
+    <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+    <div className="relative z-10">
+      <div className={`w-13 h-13 rounded-xl bg-gradient-to-br ${glowClass} flex items-center justify-center mb-5 shadow-elevated group-hover:shadow-glow-primary transition-shadow`}>
+        <Icon className="w-6 h-6 text-primary-foreground" />
+      </div>
+      <h3 className="font-display text-xl font-bold text-foreground mb-2">{title}</h3>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-5">{description}</p>
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        {tags.map(t => (
+          <span key={t.label} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-secondary/60 text-[11px] text-muted-foreground font-medium">
+            <t.icon className="w-3 h-3" /> {t.label}
+          </span>
+        ))}
+      </div>
+      <div className={`flex items-center gap-1.5 ${ctaColor} text-sm font-semibold`}>
+        {ctaText} <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1.5 transition-transform" />
+      </div>
+    </div>
+  </motion.button>
+);
 
 const Index = () => {
   const navigate = useNavigate();
@@ -105,7 +138,7 @@ const Index = () => {
       </nav>
 
       {/* ─── Hero ─── */}
-      <section className="relative z-10 flex flex-col items-center px-4 pt-14 pb-20 sm:pt-20 sm:pb-28">
+      <section className="relative z-10 flex flex-col items-center px-4 pt-16 pb-8 sm:pt-24 sm:pb-14">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -129,72 +162,86 @@ const Index = () => {
           </motion.div>
 
           {/* Headline */}
-          <h1 className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground leading-[1.1] mb-5">
-            Test Your Knowledge{' '}
-            <span className="text-gradient-primary">in Seconds</span>
+          <h1 className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground leading-[1.08] mb-5">
+            The Knowledge{' '}
+            <span className="text-gradient-primary">Arena</span>
           </h1>
 
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="text-base sm:text-lg text-muted-foreground mb-10 max-w-xl mx-auto leading-relaxed"
+            className="text-base sm:text-lg text-muted-foreground mb-12 max-w-xl mx-auto leading-relaxed"
           >
-            550+ curated questions across 10 topics. Compete on the global leaderboard, earn XP & badges. Start playing — no signup needed.
+            550+ curated questions · 10 topics · Global leaderboard · XP & badges. Choose your path below.
           </motion.p>
+        </motion.div>
+      </section>
 
-          {/* Primary CTAs — 3 options */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="flex flex-col sm:flex-row gap-3 justify-center"
-          >
-            <motion.button
-              whileHover={{ scale: 1.04, boxShadow: '0 0 40px hsl(265 90% 60% / 0.35)' }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => navigate('/solo')}
-              className="group relative px-8 py-4 rounded-2xl bg-gradient-to-r from-primary via-neon-purple to-primary text-primary-foreground font-display font-bold text-lg shadow-glow-primary flex items-center justify-center gap-3 btn-ripple overflow-hidden"
-              style={{ backgroundSize: '200% 100%', animation: 'gradient-shift 4s ease-in-out infinite' }}
-            >
-              <Play className="w-5 h-5" />
-              Play Solo
-            </motion.button>
+      {/* ─── Command Center — 3 Action Cards ─── */}
+      <section className="relative z-10 px-4 pb-20 max-w-5xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4, duration: 0.6 }}
+          className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+        >
+          <ActionCard
+            icon={Play}
+            title="Play Solo"
+            description="Pick a topic and challenge yourself. Earn XP, unlock badges, and climb the leaderboard."
+            gradient="from-primary/8 to-neon-purple/4"
+            glowClass="from-primary to-neon-purple"
+            tags={[
+              { icon: Brain, label: '550+ Questions' },
+              { icon: Trophy, label: 'Leaderboard' },
+            ]}
+            ctaText="Start playing"
+            ctaColor="text-primary"
+            onClick={() => navigate('/solo')}
+          />
+          <ActionCard
+            icon={Zap}
+            title="Create Quiz"
+            description="Build a custom quiz, get a share code, and challenge friends to compete live."
+            gradient="from-neon-purple/8 to-primary/4"
+            glowClass="from-neon-purple to-primary"
+            tags={[
+              { icon: Users, label: 'Multiplayer' },
+              { icon: BarChart3, label: 'Live Results' },
+            ]}
+            ctaText="Create now"
+            ctaColor="text-neon-purple"
+            onClick={() => navigate('/create')}
+          />
+          <ActionCard
+            icon={Gamepad2}
+            title="Join Quiz"
+            description="Enter a quiz code to join an existing game and compete against other players."
+            gradient="from-accent/8 to-neon-cyan/4"
+            glowClass="from-accent to-neon-cyan"
+            tags={[
+              { icon: Zap, label: 'Instant Join' },
+              { icon: Gamepad2, label: 'Real-time' },
+            ]}
+            ctaText="Join now"
+            ctaColor="text-accent"
+            onClick={() => navigate('/join')}
+          />
+        </motion.div>
 
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => navigate('/create')}
-              className="px-8 py-4 rounded-2xl glass-premium text-foreground font-display font-semibold text-lg flex items-center justify-center gap-3 hover:border-primary/20 transition-all"
-            >
-              <Zap className="w-5 h-5 text-primary" />
-              Create Quiz
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => navigate('/join')}
-              className="px-8 py-4 rounded-2xl glass-premium text-foreground font-display font-semibold text-lg flex items-center justify-center gap-3 hover:border-primary/20 transition-all"
-            >
-              <Users className="w-5 h-5 text-accent" />
-              Join Quiz
-            </motion.button>
-          </motion.div>
-
-          {/* Quick trust signals */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            className="flex items-center justify-center gap-4 mt-8 text-[11px] text-muted-foreground/70"
-          >
-            <span className="flex items-center gap-1"><Shield className="w-3 h-3" /> No signup</span>
-            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-            <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> Instant play</span>
-            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-            <span className="flex items-center gap-1"><Globe className="w-3 h-3" /> Global leaderboard</span>
-          </motion.div>
+        {/* Trust signals */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.7 }}
+          className="flex items-center justify-center gap-5 mt-8 text-[11px] text-muted-foreground/60"
+        >
+          <span className="flex items-center gap-1.5"><Shield className="w-3 h-3" /> No signup</span>
+          <span className="w-1 h-1 rounded-full bg-muted-foreground/20" />
+          <span className="flex items-center gap-1.5"><Zap className="w-3 h-3" /> Instant play</span>
+          <span className="w-1 h-1 rounded-full bg-muted-foreground/20" />
+          <span className="flex items-center gap-1.5"><Globe className="w-3 h-3" /> Global leaderboard</span>
         </motion.div>
       </section>
 
@@ -275,7 +322,6 @@ const Index = () => {
           })}
         </motion.div>
 
-        {/* Second CTA */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -432,7 +478,8 @@ const Index = () => {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.08 }}
-                  className="glass-card rounded-xl p-4 text-center"
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  className="glass-card rounded-xl p-4 text-center cursor-default"
                 >
                   <span className="text-2xl block mb-2">{item.icon}</span>
                   <p className="font-display font-semibold text-foreground text-xs">{item.title}</p>
