@@ -36,7 +36,7 @@ interface QuizStore {
   error: string | null;
   playerAnswers: Record<string, Answer[]>;
 
-  createQuiz: (title: string, numQuestions: number, timePerQuestion: number) => Promise<string>;
+  createQuiz: (title: string, numQuestions: number, timePerQuestion: number, topic?: string) => Promise<string>;
   joinQuiz: (code: string, name: string) => Promise<{ success: boolean; error?: string }>;
   fetchQuiz: (code: string) => Promise<boolean>;
   startQuiz: () => Promise<void>;
@@ -66,9 +66,9 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
   error: null,
   playerAnswers: {},
 
-  createQuiz: async (title, numQuestions, timePerQuestion) => {
+  createQuiz: async (title, numQuestions, timePerQuestion, topic?) => {
     const code = generateQuizCode();
-    const questions = getRandomQuestions(numQuestions);
+    const questions = getRandomQuestions(numQuestions, topic);
     const sessionId = get().sessionId;
 
     const { data: quizData, error: quizError } = await supabase
