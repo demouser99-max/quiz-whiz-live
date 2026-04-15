@@ -86,20 +86,14 @@ const QuizPlay = () => {
     const nextIdx = localIndex + 1;
     if (nextIdx >= totalQuestions) {
       setFinished(true);
-      // If host, end the quiz for everyone
-      if (isHost) {
-        endQuiz();
-      } else {
-        // Non-host: navigate to results directly
-        if (code) {
-          // Refresh quiz data to get final scores, then navigate
-          fetchQuiz(code).then(() => navigate(`/results/${code}`));
-        }
+      // Navigate this player to results without ending the quiz for others
+      if (code) {
+        fetchQuiz(code).then(() => navigate(`/results/${code}`));
       }
     } else {
       setLocalIndex(nextIdx);
     }
-  }, [localIndex, totalQuestions, isHost, endQuiz, code, fetchQuiz, navigate]);
+  }, [localIndex, totalQuestions, code, fetchQuiz, navigate]);
 
   // Finalize answer (on select or timeout)
   const finalizeAnswer = useCallback(async (selected: number | null) => {
