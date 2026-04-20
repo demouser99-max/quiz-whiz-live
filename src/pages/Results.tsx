@@ -16,7 +16,6 @@ const Results = () => {
   const quiz = useQuizStore(s => s.quiz);
   const sessionId = useQuizStore(s => s.sessionId);
   const fetchQuiz = useQuizStore(s => s.fetchQuiz);
-  const getLeaderboard = useQuizStore(s => s.getLeaderboard);
   const playerAnswers = useQuizStore(s => s.playerAnswers);
   const recordQuizResult = useGamification(s => s.recordQuizResult);
   const gamBadges = useGamification(s => s.badges);
@@ -24,14 +23,27 @@ const Results = () => {
   const level = useGamification(s => s.level);
 
   const [newBadge, setNewBadge] = useState<Badge | null>(null);
+  const [winner, setWinner] = useState<LeaderboardEntry | null>(null);
   const recordedRef = useRef(false);
 
   useEffect(() => {
     if (code) fetchQuiz(code);
   }, [code]);
 
-  const leaderboard = getLeaderboard();
-  const winner = leaderboard[0];
+  // Get winner from server (single source of truth) and keep updating in case
+  // others surpass us after we finish.
+  useEffect(() => {
+    if (!quiz?.id) return;
+    const fetchWinner = async () => {
+      const { data } = await supabase.rpc('get_quiz_leaderboard', { p_quiz_id: quiz.id });
+      const top = (data as LeaderboardEntry[] | null)?.[0] ?? null;
+      setWinner(top);
+    };
+    fetchWinner();
+    const interval = setInterval(fetchWinner, 1500);
+    return () => clearInterval(interval);
+  }, [quiz?.id]);
+
   const myPlayer = quiz?.players.find(p => p.sessionId === sessionId);
 
   // Record gamification result once
