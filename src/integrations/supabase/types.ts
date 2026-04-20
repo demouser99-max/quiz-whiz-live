@@ -64,30 +64,36 @@ export type Database = {
       }
       players: {
         Row: {
+          completed_at: string | null
           created_at: string
           id: string
           is_host: boolean
           name: string
           quiz_id: string
           score: number
+          score_updated_at: string
           session_id: string
         }
         Insert: {
+          completed_at?: string | null
           created_at?: string
           id?: string
           is_host?: boolean
           name: string
           quiz_id: string
           score?: number
+          score_updated_at?: string
           session_id: string
         }
         Update: {
+          completed_at?: string | null
           created_at?: string
           id?: string
           is_host?: boolean
           name?: string
           quiz_id?: string
           score?: number
+          score_updated_at?: string
           session_id?: string
         }
         Relationships: [
@@ -236,7 +242,37 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_quiz_leaderboard: {
+        Args: { p_quiz_id: string }
+        Returns: {
+          completed_at: string
+          id: string
+          is_host: boolean
+          name: string
+          rank: number
+          score: number
+          score_updated_at: string
+          session_id: string
+        }[]
+      }
+      mark_player_completed: {
+        Args: { p_player_id: string }
+        Returns: undefined
+      }
+      submit_answer_and_score: {
+        Args: {
+          p_player_id: string
+          p_points: number
+          p_question_id: string
+          p_quiz_id: string
+          p_selected_index: number
+          p_time_ms: number
+        }
+        Returns: {
+          new_score: number
+          score_updated_at: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
