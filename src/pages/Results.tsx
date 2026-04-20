@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuizStore } from '@/lib/quiz-store';
 import { useGamification } from '@/lib/gamification';
-import AnimatedLeaderboard from '@/components/AnimatedLeaderboard';
+import LiveLeaderboard from '@/components/LiveLeaderboard';
 import NewBadgeToast from '@/components/NewBadgeToast';
 import ThemeToggle from '@/components/ThemeToggle';
 import confetti from 'canvas-confetti';
@@ -167,8 +167,8 @@ const Results = () => {
           </motion.div>
         )}
 
-        {/* Full leaderboard */}
-        <AnimatedLeaderboard players={quiz.players} sessionId={sessionId} />
+        {/* Full leaderboard — server-ranked, auto-refreshes every 1s */}
+        <LiveLeaderboard quizId={quiz.id} sessionId={sessionId} maxShow={20} />
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
