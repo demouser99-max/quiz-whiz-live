@@ -431,3 +431,79 @@
   50% { transform: scale(1.15); }
   100% { transform: scale(1); }
 }
+
+/* === Leaderboard arena effects === */
+@keyframes spotlight-sweep {
+  0%, 100% { opacity: 0.35; transform: translateX(-30%) skewX(-12deg); }
+  50% { opacity: 0.7; transform: translateX(30%) skewX(-12deg); }
+}
+
+@keyframes gold-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes floating-points {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.6); }
+  20% { opacity: 1; transform: translate(-50%, -10px) scale(1.1); }
+  100% { opacity: 0; transform: translate(-50%, -56px) scale(0.95); }
+}
+
+@keyframes energy-pulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+
+@keyframes me-pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.55), 0 0 24px hsl(var(--primary) / 0.25); }
+  50% { box-shadow: 0 0 0 6px hsl(var(--primary) / 0), 0 0 36px hsl(var(--primary) / 0.45); }
+}
+
+@layer utilities {
+  .tier-gold-glow {
+    box-shadow:
+      0 0 0 1px hsl(var(--gold) / 0.45),
+      0 0 24px hsl(var(--gold) / 0.35),
+      0 0 56px hsl(var(--gold) / 0.18),
+      inset 0 1px 0 hsl(0 0% 100% / 0.12);
+  }
+  .tier-silver-glow {
+    box-shadow:
+      0 0 0 1px hsl(var(--silver) / 0.4),
+      0 0 18px hsl(var(--silver) / 0.28),
+      0 0 40px hsl(var(--silver) / 0.12),
+      inset 0 1px 0 hsl(0 0% 100% / 0.1);
+  }
+  .tier-bronze-glow {
+    box-shadow:
+      0 0 0 1px hsl(var(--bronze) / 0.4),
+      0 0 16px hsl(var(--bronze) / 0.28),
+      0 0 36px hsl(var(--bronze) / 0.12),
+      inset 0 1px 0 hsl(0 0% 100% / 0.08);
+  }
+  .me-pulse {
+    animation: me-pulse-ring 2.4s ease-in-out infinite;
+  }
+  .text-shimmer-gold {
+    background: linear-gradient(90deg,
+      hsl(var(--gold)) 0%,
+      hsl(45 100% 78%) 25%,
+      hsl(var(--gold)) 50%,
+      hsl(45 100% 78%) 75%,
+      hsl(var(--gold)) 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: gold-shimmer 3s linear infinite;
+  }
+  .spotlight-sweep::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 30%, hsl(var(--gold) / 0.12) 50%, transparent 70%);
+    pointer-events: none;
+    animation: spotlight-sweep 3.5s ease-in-out infinite;
+    border-radius: inherit;
+  }
+}
