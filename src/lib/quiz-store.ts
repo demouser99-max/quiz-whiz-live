@@ -44,6 +44,7 @@ interface QuizStore {
   submitAnswer: (questionId: string, selectedIndex: number, timeMs: number) => Promise<void>;
   kickPlayer: (playerId: string) => Promise<void>;
   endQuiz: () => Promise<void>;
+  markCompleted: () => Promise<void>;
   getLeaderboard: () => Player[];
   getCurrentQuestion: () => Question | null;
   subscribeToQuiz: (quizId: string) => () => void;
@@ -321,40 +322,49 @@ export const useQuizStore = create<QuizStore>((set, get) => ({
     const correct = selectedIndex === question.correctIndex;
     const points = correct ? Math.max(100, Math.round(1000 - timeMs / 10)) : 0;
 
-    // Fire and forget - don't await to prevent UI blocking
-    supabase.from('answers').insert({
-      player_id: myPlayer.id,
-      quiz_id: quiz.id,
-      question_id: questionId,
-      selected_index: selectedIndex,
-      time_ms: timeMs,
-      points,
-    }).then(({ error }) => {
-      if (error) console.error('Failed to submit answer:', error);
+    // SERVER IS SINGLE SOURCE OF TRUTH:
+    // Atomic RPC inserts the answer, updates the score, and stamps `score_updated_at`
+    // on the server clock so leaderboard ordering (and tiebreakers) are consistent
+    // across all devices regardless of local time.
+    const { data, error } = await supabase.rpc('submit_answer_and_score', {
+      p_player_id: myPlayer.id,
+      p_quiz_id: quiz.id,
+      p_question_id: questionId,
+      p_selected_index: selectedIndex,
+      p_time_ms: timeMs,
+      p_points: points,
     });
 
-    // Update score optimistically in local state
-    const newScore = myPlayer.score + points;
-    set(state => {
-      if (!state.quiz) return state;
-      return {
-        quiz: {
-          ...state.quiz,
-          players: state.quiz.players.map(p =>
-            p.id === myPlayer.id ? { ...p, score: newScore } : p
-          ),
-        },
-      };
-    });
+    if (error) {
+      console.error('Failed to submit answer:', error.message);
+      return;
+    }
 
-    // Update score in DB (fire and forget)
-    supabase
-      .from('players')
-      .update({ score: newScore })
-      .eq('id', myPlayer.id)
-      .then(({ error }) => {
-        if (error) console.error('Failed to update score:', error);
+    // Mirror the server-confirmed score locally for the player's own UI
+    // (leaderboard component reads from server directly, not from this state).
+    const serverScore = (data as Array<{ new_score: number }> | null)?.[0]?.new_score;
+    if (typeof serverScore === 'number') {
+      set(state => {
+        if (!state.quiz) return state;
+        return {
+          quiz: {
+            ...state.quiz,
+            players: state.quiz.players.map(p =>
+              p.id === myPlayer.id ? { ...p, score: serverScore } : p
+            ),
+          },
+        };
       });
+    }
+  },
+
+  markCompleted: async () => {
+    const { quiz, sessionId } = get();
+    if (!quiz) return;
+    const myPlayer = quiz.players.find(p => p.sessionId === sessionId);
+    if (!myPlayer) return;
+    const { error } = await supabase.rpc('mark_player_completed', { p_player_id: myPlayer.id });
+    if (error) console.error('Failed to mark completed:', error.message);
   },
 
   kickPlayer: async (playerId) => {
