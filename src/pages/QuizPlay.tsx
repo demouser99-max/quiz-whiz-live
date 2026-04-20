@@ -4,8 +4,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuizStore } from '@/lib/quiz-store';
 import { playCorrectSound, playWrongSound, playTickSound, playCountdownUrgent, playTransitionSound } from '@/lib/sounds';
 import CircularTimer from '@/components/CircularTimer';
+import LiveLeaderboard from '@/components/LiveLeaderboard';
 import confetti from 'canvas-confetti';
-import { Square, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Square, Sparkles, CheckCircle2, Trophy } from 'lucide-react';
 
 const optionColors = [
   { bg: 'bg-quiz-red', hover: 'hover-quiz-red', glow: 'hsl(var(--quiz-red) / 0.4)' },
@@ -27,6 +28,7 @@ const QuizPlay = () => {
   const fetchQuiz = useQuizStore(s => s.fetchQuiz);
   const submitAnswer = useQuizStore(s => s.submitAnswer);
   const endQuiz = useQuizStore(s => s.endQuiz);
+  const markCompleted = useQuizStore(s => s.markCompleted);
   const subscribeToQuiz = useQuizStore(s => s.subscribeToQuiz);
 
   // Independent local question index per player
@@ -86,14 +88,17 @@ const QuizPlay = () => {
     const nextIdx = localIndex + 1;
     if (nextIdx >= totalQuestions) {
       setFinished(true);
-      // Navigate this player to results without ending the quiz for others
+      // Mark THIS player completed on the server (server clock).
+      // Quiz session keeps running for everyone else; this player remains on
+      // the leaderboard and others can still surpass them.
+      markCompleted();
       if (code) {
         fetchQuiz(code).then(() => navigate(`/results/${code}`));
       }
     } else {
       setLocalIndex(nextIdx);
     }
-  }, [localIndex, totalQuestions, code, fetchQuiz, navigate]);
+  }, [localIndex, totalQuestions, code, fetchQuiz, navigate, markCompleted]);
 
   // Finalize answer (on select or timeout)
   const finalizeAnswer = useCallback(async (selected: number | null) => {
